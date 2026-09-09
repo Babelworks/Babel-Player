@@ -31,7 +31,7 @@ internal static class ArtifactRevisioning
         for (int revision = 1; revision <= 9999; revision++)
         {
             string candidate = BuildRevisionPath(finalPath, revision);
-            if (File.Exists(candidate))
+            if (File.Exists(candidate) || Directory.Exists(candidate))
                 continue;
 
             File.Move(finalPath, candidate);
