@@ -132,6 +132,18 @@ public sealed class ChatterboxTests : IDisposable
     }
 
     [Fact]
+    public void ModelCatalog_DownloadsPinnedHuggingFaceRevision()
+    {
+        var url = ChatterboxModelCatalog.ModelDownloadUrl("tokenizer.json");
+
+        Assert.Equal("chatterbox-multilingual", ChatterboxModelCatalog.ModelId);
+        Assert.Equal("onnx-community/chatterbox-multilingual-ONNX", ChatterboxModelCatalog.RepositoryId);
+        Assert.Equal(
+            $"https://huggingface.co/{ChatterboxModelCatalog.RepositoryId}/resolve/{ChatterboxModelCatalog.Revision}/tokenizer.json",
+            url);
+    }
+
+    [Fact]
     public void IsChatterboxModelDownloaded_RejectsZeroByteFiles()
     {
         var modelDir = Path.Combine(_dir, "chatterbox-partial");

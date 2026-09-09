@@ -670,6 +670,7 @@ public partial class EmbeddedPlaybackViewModel
         providerId switch
         {
             ProviderNames.Piper => ModelDownloader.IsPiperVoiceDownloaded(model, _coordinator.CurrentSettings.PiperModelDir),
+            ProviderNames.Chatterbox => ModelDownloader.IsChatterboxModelDownloaded(_coordinator.CurrentSettings.ChatterboxModelDir),
             _ => null,
         };
 

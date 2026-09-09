@@ -71,6 +71,17 @@ public sealed class ChatterboxConsentTests : IDisposable
         Assert.False(playback.IsChatterboxTtsSelected);
     }
 
+    [Fact]
+    public void ModelsTab_IncludesChatterboxDownloadEntry()
+    {
+        using var coordinator = CreateCoordinator(new AppSettings());
+        var tab = new ModelsTabViewModel(new ModelDownloader(_log), coordinator);
+
+        Assert.Contains(tab.Models, entry =>
+            entry.ProviderLabel == "Chatterbox"
+            && entry.ModelId == "chatterbox-multilingual");
+    }
+
     public void Dispose()
     {
         _log.Dispose();

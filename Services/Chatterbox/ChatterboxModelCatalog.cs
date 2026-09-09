@@ -4,6 +4,7 @@ namespace Babel.Player.Services.Chatterbox;
 
 internal static class ChatterboxModelCatalog
 {
+    public const string ModelId = "chatterbox-multilingual";
     public const string RepositoryId = "onnx-community/chatterbox-multilingual-ONNX";
     public const string Revision = "452d3f434aa592098f1eedac9099f33642ab2da5";
     public const string License = "MIT";

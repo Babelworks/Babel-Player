@@ -62,6 +62,21 @@ public sealed class ModelsTabViewModel : ViewModelBase
                 downloader: downloader));
         }
 
+        // ── Chatterbox ────────────────────────────────────────────────────────
+        var chatterboxModels = coordinator.TtsRegistry.GetAvailableProviders()
+                                   .FirstOrDefault(p => p.Id == ProviderNames.Chatterbox)?.SupportedModels ?? [];
+        foreach (var model in chatterboxModels)
+        {
+            var m = model;
+            entries.Add(new ModelDownloadEntry(
+                providerLabel: "Chatterbox",
+                modelId: m,
+                isDownloadedFunc: () => ModelDownloader.IsChatterboxModelDownloaded(coordinator.CurrentSettings.ChatterboxModelDir),
+                downloadFunc: (progress, token) => downloader.DownloadChatterboxModelAsync(
+                    coordinator.CurrentSettings.ChatterboxModelDir, progress, token),
+                downloader: downloader));
+        }
+
         Models = new ObservableCollection<ModelDownloadEntry>(entries);
     }
 }
