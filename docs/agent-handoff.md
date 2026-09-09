@@ -62,15 +62,21 @@ before any inference/architecture change) → `docs/aws-offload-lane.md` (Phase 
 3. **Whisper/NLLB-or-MADLAD ONNX migration** → torch venv retires → Docker backend
    deleted → startup dialog deleted with it.
 4. **Settings checkbox** for `ChatterboxVoiceCloneConsent` (setting exists, CLI flag
-   exists, GUI toggle missing).
+   exists, GUI toggle missing). **Strategic integration milestone:** Introduce 
+   `Zafiro.Avalonia` and `ReactiveUI.SourceGenerators` here to build the unified UI configuration 
+   block, keeping presentation plumbing completely isolated from background inference services.
 5. **GPU track**: fix `HardwareSnapshot` reporting `cuda=no` on the RTX 5070 (it
    detects via the CPU-only torch venv instead of the driver), then TRT-RTX EP
    plugin route per the tenets (manifest → fetch → explicit EP selection → honest
    fallback ladder). User hardware: RTX 5070 Blackwell 12GB, driver 616.x, CUDA 13.3.
-6. **Deepgram provider** (Nova-3 ASR) — clean `ITranscriptionProvider` seam job.
-7. **Phase 3 AWS lane** per `docs/aws-offload-lane.md` (Batch shape, G5/G6 bench,
+6. **Advanced Segment-Timeline Canvas UI**: Prototype the SkiaSharp timeline track editor 
+   rendering loop. Leverage `System.Reactive` exclusively here to sample pointer-scrubbing 
+   events (`.Sample(TimeSpan.FromMilliseconds(16))`) to prevent high-frequency UI events from 
+   flooding unmanaged ONNX runtime inference sessions or choking thread allocation.
+7. **Deepgram provider** (Nova-3 ASR) — clean `ITranscriptionProvider` seam job.
+8. **Phase 3 AWS lane** per `docs/aws-offload-lane.md` (Batch shape, G5/G6 bench,
    Spot, S3 layout, Bedrock workloads) — co-design with the partner team.
-8. **Hygiene backlog**: triage 28 Dependabot alerts; `gemini-*` workflows need
+9. **Hygiene backlog**: triage 28 Dependabot alerts; `gemini-*` workflows need
    secrets or disabling (user doesn't know what they are — recommend disable);
    docs site still on `babelworks.github.io`; pending torch-2.13.0 bump branch.
 
