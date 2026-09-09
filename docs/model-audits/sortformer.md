@@ -26,5 +26,6 @@
 
 - Download verifies SHA-256 before readiness succeeds.
 - Engine port follows TrackDub `Trackdub.Inference.Onnx.SortFormer` (mel/FFT contract must stay aligned).
+- Mel features are extracted for the full recording before chunked ONNX inference (NeMo-style). Follow-up: bounded feature streaming for long media; see `docs/sortformer-diarization-plan.md` Follow-ups.
 - Speaker labels from the engine (`spk_0`) are normalized to Babel `spk_00` in `SortFormerDiarizationProvider`.
 - WeSpeaker remains the default when multi-speaker detection is enabled in the UI.

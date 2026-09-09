@@ -285,6 +285,18 @@
   <data name="Button_RunPipeline" xml:space="preserve">
     <value>Run Pipeline</value>
   </data>
+  <data name="Button_ContinuePipeline" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="Status_ReviewSpeakersThenContinue" xml:space="preserve">
+    <value>Speaker mapping ready. Review speakers, then continue.</value>
+  </data>
+  <data name="Status_RunningPipeline" xml:space="preserve">
+    <value>Running pipeline…</value>
+  </data>
+  <data name="Status_ContinuingPipeline" xml:space="preserve">
+    <value>Continuing pipeline…</value>
+  </data>
   <data name="Button_CancelPipeline" xml:space="preserve">
     <value>Cancel Pipeline</value>
   </data>

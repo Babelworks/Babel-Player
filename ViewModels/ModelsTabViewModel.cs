@@ -85,7 +85,8 @@ public sealed class ModelsTabViewModel : ViewModelBase
             isDownloadedFunc: () => ModelDownloader.IsSortFormerModelDownloaded(coordinator.CurrentSettings.SortFormerModelDir),
             downloadFunc: (progress, token) => downloader.DownloadSortFormerModelAsync(
                 coordinator.CurrentSettings.SortFormerModelDir, progress, token),
-            downloader: downloader));
+            downloader: downloader,
+            deferInitialStatusRefresh: true));
 
         Models = new ObservableCollection<ModelDownloadEntry>(entries);
     }

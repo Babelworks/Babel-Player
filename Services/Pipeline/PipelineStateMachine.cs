@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Babel.Player.Models;
 
 namespace Babel.Player.Services.Pipeline;
@@ -33,10 +34,12 @@ internal static class PipelineStateMachine
 
     /// <summary>
     /// Selects the next pipeline advance action based on the current workflow stage and whether diarization should run.
+    /// When diarization is enabled, advance stops at <see cref="SessionWorkflowStage.Diarized"/> so the UI can review
+    /// speakers before <see cref="GetContinuationActionAfterDiarized"/> resumes translation and dub.
     /// Returns null when nothing is left to advance.
     /// </summary>
     /// <param name="currentStage">The current session workflow stage used to determine the next action.</param>
-    /// <param name="shouldRunDiarization">If true, diarization will be scheduled when applicable before translation-related actions.</param>
+    /// <param name="shouldRunDiarization">If true, diarization will be scheduled when applicable; translation/dub are deferred until continue.</param>
     /// <returns>
     /// A <see cref="PipelineAdvanceAction"/> representing the next action to perform, or <c>null</c> if no further advancement is required.
     /// </returns>
@@ -53,6 +56,10 @@ internal static class PipelineStateMachine
         if (shouldRunDiarization && currentStage < SessionWorkflowStage.Diarized)
             return PipelineAdvanceAction.Diarize;
 
+        // Multi-speaker UI advance pauses at Diarized for speaker review.
+        if (shouldRunDiarization && currentStage == SessionWorkflowStage.Diarized)
+            return null;
+
         if (currentStage < SessionWorkflowStage.Translated)
             return PipelineAdvanceAction.TranslateAndDubFromTranscript;
 
@@ -60,6 +67,32 @@ internal static class PipelineStateMachine
             return PipelineAdvanceAction.GenerateTts;
 
         return null;
+    }
+
+    /// <summary>
+    /// Stages that a single <c>AdvancePipelineAsync</c> invocation will attempt when starting from <paramref name="currentStage"/>.
+    /// When diarization is on, advance ends at <see cref="SessionWorkflowStage.Diarized"/> (translation/dub are continuation stages).
+    /// </summary>
+    internal static IReadOnlyList<SessionWorkflowStage> GetAdvancePipelineStages(
+        SessionWorkflowStage currentStage,
+        bool shouldRunDiarization)
+    {
+        var stages = new List<SessionWorkflowStage>(capacity: shouldRunDiarization ? 2 : 3);
+        if (currentStage < SessionWorkflowStage.Transcribed)
+            stages.Add(SessionWorkflowStage.Transcribed);
+
+        if (shouldRunDiarization && currentStage < SessionWorkflowStage.Diarized)
+            stages.Add(SessionWorkflowStage.Diarized);
+
+        if (!shouldRunDiarization)
+        {
+            if (currentStage < SessionWorkflowStage.Translated)
+                stages.Add(SessionWorkflowStage.Translated);
+            if (currentStage < SessionWorkflowStage.TtsGenerated)
+                stages.Add(SessionWorkflowStage.TtsGenerated);
+        }
+
+        return stages;
     }
 
     /// <summary>

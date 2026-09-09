@@ -300,7 +300,7 @@ public sealed partial class SessionWorkflowCoordinator
                 currentSession.Stage >= SessionWorkflowStage.Translated
                     ? currentSession.Stage
                     : SessionWorkflowStage.Diarized);
-            var nextStatusMessage = statusMessage ?? "Speaker analysis complete.";
+            var nextStatusMessage = statusMessage ?? LocalizationService.Instance["Status_ReviewSpeakersThenContinue"];
 
             lock (_sessionLock)
             {

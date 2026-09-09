@@ -24,7 +24,8 @@ public sealed partial class ModelDownloadEntry : ViewModelBase
         string modelId,
         Func<bool> isDownloadedFunc,
         Func<IProgress<double>, CancellationToken, Task<bool>> downloadFunc,
-        ModelDownloader downloader)
+        ModelDownloader downloader,
+        bool deferInitialStatusRefresh = false)
     {
         ProviderLabel = providerLabel;
         ModelId = modelId;
@@ -34,7 +35,23 @@ public sealed partial class ModelDownloadEntry : ViewModelBase
             new Progress<double>(p => Dispatcher.UIThread.Post(() => DownloadProgress = p)),
             _cts!.Token);
 
-        RefreshStatus();
+        if (deferInitialStatusRefresh)
+        {
+            // Avoid blocking Models-tab construction on expensive disk hashing (e.g. SortFormer).
+            _ = Task.Run(() =>
+            {
+                bool downloaded = _isDownloadedFunc();
+                Dispatcher.UIThread.Post(() =>
+                {
+                    IsDownloaded = downloaded;
+                    ErrorMessage = null;
+                });
+            });
+        }
+        else
+        {
+            RefreshStatus();
+        }
     }
 
     public string ProviderLabel { get; }

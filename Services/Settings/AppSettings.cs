@@ -143,7 +143,8 @@ public sealed class AppSettings
 
     /// <summary>
     /// Directory where SortFormer ONNX model files are stored.
-    /// Empty string = use platform default (%LOCALAPPDATA%\BabelPlayer\models\sortformer-4spk on Windows).
+    /// Empty string = use platform default under LocalApplicationData
+    /// (<c>BabelPlayer/models/sortformer-4spk</c> on all platforms).
     /// </summary>
     public string SortFormerModelDir { get; set; } = "";
 

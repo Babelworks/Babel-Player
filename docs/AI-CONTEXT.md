@@ -116,6 +116,7 @@ Notes:
 - XTTS is not part of the active TTS pipeline.
 - Google Cloud TTS has code paths but is not surfaced in the current TTS registry UI list.
 - WeSpeaker is the default managed CPU diarization path when multi-speaker detection is enabled. SortFormer is a selectable CPU ONNX alternative (max 4 speakers). The old GPU-hosted WeSpeaker endpoint is retired.
+- Multi-speaker UI runs pause at `Diarized` for speaker wizard review (merge / voices / refs), then Continue into translation and dub. Headless `--dub` continues automatically without pausing. Restores the milestone-13 pause/resume intent.
 
 ---
 

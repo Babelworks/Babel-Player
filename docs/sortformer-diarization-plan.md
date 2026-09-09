@@ -41,6 +41,10 @@ SourceMedia -> FfmpegExtractFullAudio (16 kHz mono)
 
 FFT/mel must not drift from TrackDub (MathNet.Numerics 5.0.0, `FourierOptions.Matlab`).
 
+## Related UX
+
+Multi-speaker UI pauses after diarization for speaker wizard review, then Continue runs translation and dub. Headless `--dub` does not pause (auto-continues). See `docs/history/smoke/milestone-13-diarized-pause-and-gpu-warmup.md` for the historical partial pause intent now restored on `feature/diarized-speaker-review-pause`.
+
 ## Verification
 
 ```powershell
@@ -53,3 +57,7 @@ dotnet test BabelPlayer.Tests/BabelPlayer.Tests.csproj -c Release
 - Flipping the default away from WeSpeaker
 - Deleting WeSpeaker
 - TensorRT / CUDA / 8-speaker variants
+
+## Follow-ups
+
+- **Bounded feature streaming:** `SortFormerDiarizationEngine.RunStreamingFeatureModel` currently extracts mel features for the entire decoded recording (NeMo-style) before chunked ONNX steps. That matches the TrackDub/NeMo offline-feature + streaming-encoder pattern, but long media can spike heap while samples and full feature buffers are both live. A later hardening pass should stream or window feature extraction so peak memory stays bounded, without changing the AOSC/spkcache/fifo contract.

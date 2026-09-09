@@ -15,7 +15,7 @@ public sealed class PipelineStateMachineTests
     }
 
     [Fact]
-    public void GetNextAdvanceAction_FollowsTranscribeDiarizeTranslateTtsOrdering()
+    public void GetNextAdvanceAction_FollowsTranscribeDiarizeThenPauseForReview()
     {
         // Foundation (pre-MediaLoaded) must not advance to Transcribe.
         Assert.Null(PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.Foundation, shouldRunDiarization: false));
@@ -31,13 +31,45 @@ public sealed class PipelineStateMachineTests
         Assert.Equal(PipelineAdvanceAction.TranslateAndDubFromTranscript,
             PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.Transcribed, shouldRunDiarization: false));
 
+        // Multi-speaker advance pauses at Diarized for speaker review.
+        Assert.Null(PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.Diarized, shouldRunDiarization: true));
+
+        // Without diarization, Diarized is not a pause point; translate/dub can still advance.
         Assert.Equal(PipelineAdvanceAction.TranslateAndDubFromTranscript,
-            PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.Diarized, shouldRunDiarization: true));
+            PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.Diarized, shouldRunDiarization: false));
 
         Assert.Equal(PipelineAdvanceAction.GenerateTts,
             PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.Translated, shouldRunDiarization: true));
 
         Assert.Null(PipelineStateMachine.GetNextAdvanceAction(SessionWorkflowStage.TtsGenerated, shouldRunDiarization: true));
+    }
+
+    [Fact]
+    public void GetAdvancePipelineStages_MultiSpeakerStopsAtDiarized()
+    {
+        var stages = PipelineStateMachine.GetAdvancePipelineStages(
+            SessionWorkflowStage.MediaLoaded,
+            shouldRunDiarization: true);
+
+        Assert.Equal(
+            [SessionWorkflowStage.Transcribed, SessionWorkflowStage.Diarized],
+            stages);
+    }
+
+    [Fact]
+    public void GetAdvancePipelineStages_SingleSpeakerIncludesTranslateAndTts()
+    {
+        var stages = PipelineStateMachine.GetAdvancePipelineStages(
+            SessionWorkflowStage.MediaLoaded,
+            shouldRunDiarization: false);
+
+        Assert.Equal(
+            [
+                SessionWorkflowStage.Transcribed,
+                SessionWorkflowStage.Translated,
+                SessionWorkflowStage.TtsGenerated,
+            ],
+            stages);
     }
 
     [Fact]

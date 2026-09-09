@@ -52,7 +52,7 @@ internal sealed class DiarizationStageOrchestrator
                     _session.CurrentSession.TranscriptPath,
                     cancellationToken,
                     resultingStage: SessionWorkflowStage.Diarized,
-                    statusMessage: "Speaker analysis complete.")
+                    statusMessage: LocalizationService.Instance["Status_ReviewSpeakersThenContinue"])
                 .ConfigureAwait(false);
 
             PipelineStageReporter.ReportStage(

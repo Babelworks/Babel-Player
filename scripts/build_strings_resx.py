@@ -106,6 +106,10 @@ STRINGS: Dict[str, str] = {
     # ----- Main window: run / cancel -----
     "Automation_PipelineProgress": "Pipeline progress",
     "Button_RunPipeline": "Run Pipeline",
+    "Button_ContinuePipeline": "Continue",
+    "Status_ReviewSpeakersThenContinue": "Speaker mapping ready. Review speakers, then continue.",
+    "Status_RunningPipeline": "Running pipeline…",
+    "Status_ContinuingPipeline": "Continuing pipeline…",
     "Button_CancelPipeline": "Cancel Pipeline",
     "Tooltip_ExpandErrorDetails": "Expand error details",
     "Automation_ExpandErrorDetails": "Expand error details",

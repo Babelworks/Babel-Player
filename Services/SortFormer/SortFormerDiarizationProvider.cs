@@ -28,6 +28,7 @@ public sealed class SortFormerDiarizationProvider : IDiarizationProvider, IDispo
 
     public ProviderReadiness CheckReadiness(AppSettings settings, ApiKeyStore? keyStore)
     {
+        // IsSortFormerModelDownloaded already verifies SHA-256 (with metadata cache).
         if (!ModelDownloader.IsSortFormerModelDownloaded(settings.SortFormerModelDir))
         {
             return new ProviderReadiness(
@@ -35,18 +36,6 @@ public sealed class SortFormerDiarizationProvider : IDiarizationProvider, IDispo
                 "SortFormer diarization model is not downloaded yet.",
                 RequiresModelDownload: true,
                 ModelDownloadDescription: "Download SortFormer 4-speaker diarization model");
-        }
-
-        var modelPath = Path.Combine(
-            ModelDownloader.ResolveSortFormerModelDir(settings.SortFormerModelDir),
-            SortFormerModelCatalog.RelativeModelPath);
-        if (!SortFormerModelFiles.TryVerifySha256(modelPath, out _))
-        {
-            return new ProviderReadiness(
-                false,
-                "SortFormer model file failed SHA-256 verification. Re-download the model.",
-                RequiresModelDownload: true,
-                ModelDownloadDescription: "Re-download SortFormer 4-speaker diarization model");
         }
 
         return new ProviderReadiness(true, null);
@@ -57,14 +46,13 @@ public sealed class SortFormerDiarizationProvider : IDiarizationProvider, IDispo
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
-        if (ModelDownloader.IsSortFormerModelDownloaded(settings.SortFormerModelDir))
-        {
-            var modelPath = Path.Combine(
-                ModelDownloader.ResolveSortFormerModelDir(settings.SortFormerModelDir),
-                SortFormerModelCatalog.RelativeModelPath);
-            if (SortFormerModelFiles.TryVerifySha256(modelPath, out _))
-                return true;
-        }
+        // Hash the ~492 MB ONNX off the caller/UI thread.
+        bool alreadyReady = await Task.Run(
+                () => ModelDownloader.IsSortFormerModelDownloaded(settings.SortFormerModelDir),
+                ct)
+            .ConfigureAwait(false);
+        if (alreadyReady)
+            return true;
 
         return await new ModelDownloader(_log)
             .DownloadSortFormerModelAsync(settings.SortFormerModelDir, progress, ct)

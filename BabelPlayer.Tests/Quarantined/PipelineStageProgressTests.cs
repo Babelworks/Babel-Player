@@ -186,7 +186,7 @@ public sealed class PipelineStageProgressTests() : IDisposable
     }
 
     [Fact]
-    public async Task AdvancePipelineAsync_MultiSpeakerRun_ContinuesPastDiarizedIntoTranslationAndDub()
+    public async Task AdvancePipelineAsync_MultiSpeakerRun_PausesAtDiarizedForSpeakerReview()
     {
         var settings = CreateSettings();
         settings.DiarizationProvider = ProviderNames.WeSpeakerLocal;
@@ -212,11 +212,12 @@ public sealed class PipelineStageProgressTests() : IDisposable
         List<SessionWorkflowCoordinator.PipelineStageUpdate> updates = [];
         await coordinator.AdvancePipelineAsync(stageProgress: new CaptureProgress<SessionWorkflowCoordinator.PipelineStageUpdate>(updates));
 
-        Assert.Equal(SessionWorkflowStage.TtsGenerated, coordinator.CurrentSession.Stage);
-        AssertStage(updates, SessionWorkflowStage.Transcribed, 1, 4);
-        AssertStage(updates, SessionWorkflowStage.Diarized, 2, 4);
-        AssertStage(updates, SessionWorkflowStage.Translated, 3, 4);
-        AssertStage(updates, SessionWorkflowStage.TtsGenerated, 4, 4);
+        Assert.Equal(SessionWorkflowStage.Diarized, coordinator.CurrentSession.Stage);
+        Assert.Contains("Review speakers", coordinator.CurrentSession.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        AssertStage(updates, SessionWorkflowStage.Transcribed, 1, 2);
+        AssertStage(updates, SessionWorkflowStage.Diarized, 2, 2);
+        Assert.DoesNotContain(updates, update => update.TargetStage == SessionWorkflowStage.Translated);
+        Assert.DoesNotContain(updates, update => update.TargetStage == SessionWorkflowStage.TtsGenerated);
     }
 
     [Fact]
