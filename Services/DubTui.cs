@@ -370,9 +370,8 @@ public static class DubTui
 
         try
         {
-            var lines = File.ReadAllLines(logPath);
-            foreach (var line in lines.Skip(Math.Max(0, lines.Length - 40)))
-                Console.WriteLine(line);
+foreach (var line in File.ReadLines(logPath).TakeLast(40))
+    Console.WriteLine(line);
         }
         catch (Exception ex)
         {
