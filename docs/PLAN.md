@@ -20,6 +20,8 @@ The main remaining work is hardening, progress UX, and continued architecture cl
   Repo structure, provider matrix, commands, and artifact paths.
 - [architecture.md](architecture.md)
   Structural boundaries and state ownership.
+- [architecture-reactive-ui-zafiro.md](architecture-reactive-ui-zafiro.md)
+  Draft feasibility study for ReactiveUI / Zafiro in the presentation layer. Not adopted.
 - [Engineering-Plan.md](Engineering-Plan.md)
   Maintained engineering status and current implementation summary.
 - [Next-Priorities-2026-04-16.md](Next-Priorities-2026-04-16.md)

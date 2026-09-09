@@ -189,6 +189,7 @@ The repo should not lock in large future systems before the current milestones e
 - plugin systems
 - speculative multi-platform complexity beyond current support goals
 - abstractions created mainly for hypothetical future backends
+- a second MVVM / functional-UI stack (ReactiveUI, Zafiro.Avalonia) in the shell. See [architecture-reactive-ui-zafiro.md](architecture-reactive-ui-zafiro.md) for the feasibility study. That document is not permission to add those packages.
 
 When something is not decided, say it is not decided.
 When something is not implemented, surface that truthfully.
