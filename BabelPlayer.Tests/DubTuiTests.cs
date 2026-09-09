@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Babel.Player.Models;
 using Babel.Player.Models.LanguageSupport;
@@ -18,7 +19,7 @@ namespace BabelPlayer.Tests;
 public sealed class DubTuiTests
 {
     private static async Task<(int ExitCode, string Out, string Err)> RunWithStdIoAsync(
-        string[] args, string stdin)
+        string[] args, string stdin, CancellationToken cancellationToken = default)
     {
         var prevIn = Console.In;
         var prevOut = Console.Out;
@@ -31,7 +32,7 @@ public sealed class DubTuiTests
             Console.SetIn(reader);
             Console.SetOut(outWriter);
             Console.SetError(errWriter);
-            int code = await DubTui.RunAsync(args);
+            int code = await DubTui.RunAsync(args, cancellationToken);
             return (code, outWriter.ToString(), errWriter.ToString());
         }
         finally
@@ -101,15 +102,93 @@ public sealed class DubTuiTests
     [Fact]
     public void BuildDubArgv_MirrorsDubCliFlags()
     {
-        var argv = DubTui.BuildDubArgv("clip.mp4", "es", ProviderNames.Piper, true, true, null, false);
-        Assert.Equal(["--dub", "--media", "clip.mp4", "--lang", "es", "--tts", ProviderNames.Piper], argv);
+        var argv = DubTui.BuildDubArgv("clip.mp4", "es", ProviderNames.Piper, "my-voice", true, true, null, false);
+        Assert.Equal(["--dub", "--media", "clip.mp4", "--lang", "es", "--tts", ProviderNames.Piper, "--voice", "my-voice"], argv);
 
-        var audioArgv = DubTui.BuildDubArgv("clip.mp3", "es", string.Empty, false, false, "C:\\out", true);
+        var audioArgv = DubTui.BuildDubArgv("clip.mp3", "es", string.Empty, "  ", false, false, "C:\\out", true);
         Assert.DoesNotContain("--tts", audioArgv);
+        Assert.DoesNotContain("--voice", audioArgv);
         Assert.Contains("--no-diarization", audioArgv);
         Assert.Contains("--no-mp4", audioArgv);
         Assert.Contains("--consent-clone", audioArgv);
         Assert.Contains("C:\\out", audioArgv);
+    }
+
+    [Fact]
+    public async Task InvalidPresetLang_ReturnsArgumentError()
+    {
+        var (code, _, _) = await RunWithStdIoAsync(["--tui", "--lang", "xx"], string.Empty);
+        Assert.Equal(1, code);
+    }
+
+    [Fact]
+    public async Task CancelledToken_ReturnsCancelledExitCode()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var (code, _, _) = await RunWithStdIoAsync(["--tui"], "0\n", cts.Token);
+        Assert.Equal(130, code);
+    }
+
+    [Fact]
+    public void ReadSettingsValue_FallsBackForUnknownKey()
+    {
+        Assert.Equal("fb", DubTui.ReadSettingsValue("NoSuchSettingKey", "fb"));
+    }
+
+    [Fact]
+    public async Task Wizard_BuildsArgvAndPropagatesEngineExitCode()
+    {
+        var media = Path.Combine(Path.GetTempPath(), $"babel-tui-{Guid.NewGuid():N}.mp4");
+        File.WriteAllText(media, string.Empty);
+        string[]? captured = null;
+        var previous = DubTui.RunPipelineEngine;
+        try
+        {
+            DubTui.RunPipelineEngine = (argv, _) =>
+            {
+                captured = argv;
+                return Task.FromResult(0);
+            };
+            var (code, output, _) = await RunWithStdIoAsync(
+                ["--tui", "--media", media, "--lang", "es"],
+                "1\n2\n\nn\ny\n\n");
+            Assert.Equal(0, code);
+            Assert.NotNull(captured);
+            Assert.Contains("--dub", captured);
+            Assert.Contains(media, captured);
+            Assert.Contains("es", captured);
+            Assert.Contains(ProviderNames.Piper, captured);
+            Assert.Contains("--no-diarization", captured);
+            Assert.DoesNotContain("--no-mp4", captured);
+            Assert.Contains("transcription", output);
+        }
+        finally
+        {
+            DubTui.RunPipelineEngine = previous;
+            File.Delete(media);
+        }
+    }
+
+    [Fact]
+    public async Task Wizard_PropagatesEngineFailure()
+    {
+        var media = Path.Combine(Path.GetTempPath(), $"babel-tui-{Guid.NewGuid():N}.mp4");
+        File.WriteAllText(media, string.Empty);
+        var previous = DubTui.RunPipelineEngine;
+        try
+        {
+            DubTui.RunPipelineEngine = (_, _) => Task.FromResult(2);
+            var (code, _, _) = await RunWithStdIoAsync(
+                ["--tui", "--media", media, "--lang", "es"],
+                "1\n2\n\nn\ny\n\n");
+            Assert.Equal(2, code);
+        }
+        finally
+        {
+            DubTui.RunPipelineEngine = previous;
+            File.Delete(media);
+        }
     }
 
     [Fact]

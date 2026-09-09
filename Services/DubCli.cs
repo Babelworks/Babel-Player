@@ -50,11 +50,12 @@ public static class DubCli
         string? lang = BenchmarkCli.GetArg(args, "--lang");
         string? outDir = BenchmarkCli.GetArg(args, "--out");
         string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
+        string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
         bool noDiarization = HasFlag(args, "--no-diarization");
         bool noMp4 = HasFlag(args, "--no-mp4");
         bool consentClone = HasFlag(args, "--consent-clone");
 
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--no-diarization", "--no-mp4", "--consent-clone", "--help", "-h" };
+        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--no-diarization", "--no-mp4", "--consent-clone", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -126,6 +127,8 @@ public static class DubCli
                 settings.TtsProvider = ttsOverride.Trim().ToLowerInvariant();
                 settings.TtsProfile = InferenceRuntimeCatalog.InferTtsProfile(settings.TtsProvider);
             }
+            if (!string.IsNullOrWhiteSpace(voiceOverride))
+                settings.TtsVoice = voiceOverride.Trim();
 
             if (consentClone)
                 settings.ChatterboxVoiceCloneConsent = true;
@@ -169,7 +172,7 @@ public static class DubCli
             coordinator.LoadMedia(media);
             Console.WriteLine($"[dub] session {coordinator.CurrentSession.SessionId} at stage {coordinator.CurrentSession.Stage}");
 
-            if (!string.IsNullOrWhiteSpace(ttsOverride) &&
+            if ((!string.IsNullOrWhiteSpace(ttsOverride) || !string.IsNullOrWhiteSpace(voiceOverride)) &&
                 coordinator.CurrentSession.Stage >= SessionWorkflowStage.Translated)
             {
                 Console.WriteLine("[dub] re-running TTS under the requested provider.");
@@ -354,6 +357,7 @@ public static class DubCli
         Console.WriteLine("  --lang <code>           Translation target language (default: settings)");
         Console.WriteLine("  --out <dir>             Output directory (default: alongside media)");
         Console.WriteLine("  --tts <provider>        TTS provider override (e.g. chatterbox)");
+        Console.WriteLine("  --voice <id>            TTS voice/model override (default: settings)");
         Console.WriteLine("  --no-diarization        Skip diarization for this run");
         Console.WriteLine("  --no-mp4                Skip MP4 export (SRT + MP3 only)");
         Console.WriteLine("  --consent-clone         Grant voice-cloning consent for this run");
