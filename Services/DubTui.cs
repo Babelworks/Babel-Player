@@ -40,6 +40,7 @@ public static class DubTui
         bool? Diarization,
         bool? Mp4,
         string? OutDir,
+        string? ProjectDir,
         bool ConsentClone);
     private static readonly string[] MediaExtensions =
     [
@@ -155,6 +156,7 @@ public static class DubTui
         bool diarization,
         bool mp4,
         string? outDir,
+        string? projectDir,
         bool consentClone)
     {
         var argv = new List<string> { "--dub", "--media", media, "--lang", lang };
@@ -162,6 +164,8 @@ public static class DubTui
             argv.AddRange(["--tts", tts]);
         if (!string.IsNullOrWhiteSpace(voice))
             argv.AddRange(["--voice", voice.Trim()]);
+        if (!string.IsNullOrWhiteSpace(projectDir))
+            argv.AddRange(["--project-dir", projectDir.Trim()]);
         if (!diarization)
             argv.Add("--no-diarization");
         if (!mp4)
@@ -184,7 +188,7 @@ public static class DubTui
             return 0;
         }
 
-        var known = new[] { "--tui", "--media", "--lang", "--tts", "--voice", "--out", "--no-diarization", "--no-mp4", "--consent-clone", "--help", "-h" };
+        var known = new[] { "--tui", "--media", "--lang", "--tts", "--voice", "--out", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -198,6 +202,7 @@ public static class DubTui
         string? presetTts = BenchmarkCli.GetArg(args, "--tts");
         string? presetVoice = BenchmarkCli.GetArg(args, "--voice");
         string? presetOut = BenchmarkCli.GetArg(args, "--out");
+        string? presetProjectDir = BenchmarkCli.GetArg(args, "--project-dir");
         if (presetMedia is not null && !File.Exists(presetMedia))
         {
             Console.Error.WriteLine($"[tui] Media file not found: {presetMedia}");
@@ -218,6 +223,11 @@ public static class DubTui
             Console.Error.WriteLine($"[tui] Invalid output directory: {presetOut}");
             return 1;
         }
+        if (presetProjectDir is not null && !IsValidOutDir(presetProjectDir))
+        {
+            Console.Error.WriteLine($"[tui] Invalid project directory: {presetProjectDir}");
+            return 1;
+        }
 
         // Staged wizard (archive DubSetupWizard pattern): preset flags answer their
         // prompts up front, so a fully preset invocation runs without prompting.
@@ -229,6 +239,7 @@ public static class DubTui
             HasFlag(args, "--no-diarization") ? false : null,
             HasFlag(args, "--no-mp4") ? false : null,
             presetOut?.Trim().Trim('"'),
+            presetProjectDir?.Trim().Trim('"'),
             HasFlag(args, "--consent-clone"));
 
         try
@@ -344,7 +355,7 @@ public static class DubTui
             }
         }
 
-        var argv = BuildDubArgv(media, lang, tts, voice, diarization, mp4, outDir, consentClone);
+        var argv = BuildDubArgv(media, lang, tts, voice, diarization, mp4, outDir, presets?.ProjectDir, consentClone);
 
         Console.WriteLine();
         Console.WriteLine($"[tui] {EffectiveConfigLine(tts, lang)}");
@@ -588,7 +599,8 @@ public static class DubTui
         Console.WriteLine();
         Console.WriteLine("Usage:");
         Console.WriteLine("  BabelPlayer.exe --tui [--media <path>] [--lang <code>] [--tts <provider>]");
-        Console.WriteLine("    [--voice <id>] [--out <dir>] [--no-diarization] [--no-mp4] [--consent-clone]");
+        Console.WriteLine("    [--voice <id>] [--out <dir>] [--project-dir <dir>]");
+        Console.WriteLine("    [--no-diarization] [--no-mp4] [--consent-clone]");
         Console.WriteLine();
         Console.WriteLine("Menu-driven setup asks only for what flags did not answer, shows the");
         Console.WriteLine("effective configuration, then runs the same pipeline engine as --dub.");

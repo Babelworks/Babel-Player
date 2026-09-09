@@ -261,6 +261,18 @@ public sealed class RegistryTests : IDisposable
         Assert.Contains(providers, p => p.Id == ProviderNames.EdgeTts);
     }
 
+    [Fact]
+    public void TtsRegistry_Chatterbox_ExposesMultilingualModelForDownload()
+    {
+        var chatterbox = _ttsRegistry.GetAvailableProviders(ComputeProfile.Cpu)
+            .Single(p => p.Id == ProviderNames.Chatterbox);
+
+        Assert.Contains("chatterbox-multilingual", chatterbox.SupportedModels);
+        Assert.Equal(
+            ["chatterbox-multilingual"],
+            _ttsRegistry.GetAvailableModels(ProviderNames.Chatterbox, ComputeProfile.Cpu, new AppSettings()));
+    }
+
 
     [Fact]
     public void TtsRegistry_CheckReadiness_UnknownProvider_ReturnsNotReady()

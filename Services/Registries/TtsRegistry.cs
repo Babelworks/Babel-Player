@@ -81,7 +81,7 @@ public sealed class TtsRegistry : ITtsRegistry
                     "Chatterbox (Voice Cloning, Local)",
                     false,
                     null,
-                    [],
+                    [ChatterboxModelCatalog.ModelId],
                     SupportedRuntimes: [InferenceRuntime.Local],
                     DefaultRuntime: InferenceRuntime.Local),
             ];

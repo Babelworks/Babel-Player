@@ -331,7 +331,7 @@ public static class DependencyLocator
     /// Bootstraps and returns a SessionWorkflowCoordinator by constructing and wiring host managers, registries, and a session snapshot store, and by requesting containerized services to start.
     /// Handles fallback creation if the primary initialization fails (e.g., due to corrupt state files).
     /// </summary>
-    /// <param name="appDataRoot">Filesystem root used to locate the session snapshot at '{appDataRoot}/state/current-session.json'.</param>
+    /// <param name="stateDir">Directory containing the current session snapshot file.</param>
     /// <param name="startupLog">Optional logger that receives startup errors if primary initialization fails.</param>
     /// <param name="primaryGpuManager">Outputs the ManagedVenvHostManager instance chosen as the primary GPU-capable host manager.</param>
     /// <summary>
@@ -343,7 +343,7 @@ public static class DependencyLocator
     /// <param name="recentStore">Recent sessions store.</param>
     /// <param name="apiKeyStore">API key store.</param>
     /// <param name="transportManager">Media transport manager.</param>
-    /// <param name="appDataRoot">Root application data directory where the session snapshot is stored.</param>
+    /// <param name="stateDir">Directory containing the current session snapshot file.</param>
     /// <param name="startupLog">Optional logger used to record initialization failures during the primary path.</param>
     /// <param name="primaryGpuManager">Outputs the selected managed GPU host manager.</param>
     /// <returns>The initialized SessionWorkflowCoordinator.</returns>
@@ -354,7 +354,7 @@ public static class DependencyLocator
         RecentSessionsStore recentStore,
         ApiKeyStore apiKeyStore,
         IMediaTransportManager transportManager,
-        string appDataRoot,
+        string stateDir,
         AppLog? startupLog,
         out ManagedVenvHostManager? primaryGpuManager)
     {
@@ -363,7 +363,7 @@ public static class DependencyLocator
             appLog.Info("App startup: initializing session coordinator.");
             var coordinator = CreateCoordinatorInstance(
                 appLog, appSettings, perSessionStore, recentStore, apiKeyStore, 
-                transportManager, appDataRoot, out primaryGpuManager);
+                transportManager, stateDir, out primaryGpuManager);
             
             coordinator.Initialize();
             
@@ -380,7 +380,7 @@ public static class DependencyLocator
 
             var coordinator = CreateCoordinatorInstance(
                 appLog, appSettings, perSessionStore, recentStore, apiKeyStore,
-                transportManager, appDataRoot, out primaryGpuManager);
+                transportManager, stateDir, out primaryGpuManager);
 
             // Skip Initialize() to start with an empty session rather than crashing on corrupt state.
             // Still request containerized autostart.
@@ -395,7 +395,7 @@ public static class DependencyLocator
 
             var coordinator = CreateCoordinatorInstance(
                 appLog, appSettings, perSessionStore, recentStore, apiKeyStore,
-                transportManager, appDataRoot, out primaryGpuManager);
+                transportManager, stateDir, out primaryGpuManager);
 
             // Skip Initialize() to start with an empty session rather than crashing on corrupt state.
             // Still request containerized autostart.
@@ -415,7 +415,7 @@ public static class DependencyLocator
     /// <param name="recentStore">Store of recent sessions.</param>
     /// <param name="apiKeyStore">API key store used by the coordinator.</param>
     /// <param name="transportManager">Media transport manager supplied to the coordinator.</param>
-    /// <param name="appDataRoot">Root directory used to locate the persisted session snapshot file.</param>
+    /// <param name="stateDir">Directory containing the current session snapshot file.</param>
     /// <param name="primaryGpuManager">Outputs the managed virtual environment host manager that serves as the primary GPU-backed inference host.</param>
     /// <returns>The configured SessionWorkflowCoordinator instance.</returns>
     private static SessionWorkflowCoordinator CreateCoordinatorInstance(
@@ -425,7 +425,7 @@ public static class DependencyLocator
         RecentSessionsStore recentStore,
         ApiKeyStore apiKeyStore,
         IMediaTransportManager transportManager,
-        string appDataRoot,
+        string stateDir,
         out ManagedVenvHostManager primaryGpuManager)
     {
         var containerizedProbe = new ContainerizedServiceProbe(appLog);
@@ -446,7 +446,7 @@ public static class DependencyLocator
         var diarizationRegistry = new DiarizationRegistry(appLog, containerizedProbe, requestLeaseTracker);
 
         var snapshotStore = new SessionSnapshotStore(
-            Path.Combine(appDataRoot, "state", "current-session.json"), appLog);
+            Path.Combine(stateDir, "current-session.json"), appLog);
         
         var registries = new RegistryBundle(
             perSessionStore,

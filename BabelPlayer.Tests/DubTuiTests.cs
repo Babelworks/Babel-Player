@@ -104,12 +104,13 @@ public sealed class DubTuiTests
     [Fact]
     public void BuildDubArgv_MirrorsDubCliFlags()
     {
-        var argv = DubTui.BuildDubArgv("clip.mp4", "es", ProviderNames.Piper, "my-voice", true, true, null, false);
-        Assert.Equal(["--dub", "--media", "clip.mp4", "--lang", "es", "--tts", ProviderNames.Piper, "--voice", "my-voice"], argv);
+        var argv = DubTui.BuildDubArgv("clip.mp4", "es", ProviderNames.Piper, "my-voice", true, true, null, "proj", false);
+        Assert.Equal(["--dub", "--media", "clip.mp4", "--lang", "es", "--tts", ProviderNames.Piper, "--voice", "my-voice", "--project-dir", "proj"], argv);
 
-        var audioArgv = DubTui.BuildDubArgv("clip.mp3", "es", string.Empty, "  ", false, false, "C:\\out", true);
+        var audioArgv = DubTui.BuildDubArgv("clip.mp3", "es", string.Empty, "  ", false, false, "C:\\out", null, true);
         Assert.DoesNotContain("--tts", audioArgv);
         Assert.DoesNotContain("--voice", audioArgv);
+        Assert.DoesNotContain("--project-dir", audioArgv);
         Assert.Contains("--no-diarization", audioArgv);
         Assert.Contains("--no-mp4", audioArgv);
         Assert.Contains("--consent-clone", audioArgv);
@@ -226,6 +227,36 @@ public sealed class DubTuiTests
             Assert.Contains("--no-diarization", captured);
             Assert.DoesNotContain("--no-mp4", captured);
             Assert.Contains("transcription", output);
+        }
+        finally
+        {
+            DubTui.RunPipelineEngine = previous;
+            File.Delete(media);
+        }
+    }
+
+    [Fact]
+    public async Task ProjectDirPreset_PassesThroughToEngine()
+    {
+        var media = Path.Combine(Path.GetTempPath(), $"babel-tui-{Guid.NewGuid():N}.mp4");
+        File.WriteAllText(media, string.Empty);
+        string[]? captured = null;
+        var previous = DubTui.RunPipelineEngine;
+        try
+        {
+            DubTui.RunPipelineEngine = (argv, _) =>
+            {
+                captured = argv;
+                return Task.FromResult(0);
+            };
+            var (code, _, _) = await RunWithStdIoAsync(
+                ["--tui", "--media", media, "--lang", "es", "--tts", "piper",
+                 "--no-diarization", "--no-mp4", "--project-dir", "some-proj"],
+                "1\n\n");
+            Assert.Equal(0, code);
+            Assert.NotNull(captured);
+            Assert.Contains("--project-dir", captured);
+            Assert.Contains("some-proj", captured);
         }
         finally
         {

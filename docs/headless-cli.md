@@ -8,9 +8,14 @@ window. Exit codes: 0 success, 1 bad arguments, 2 pipeline failure,
 
 ```text
 BabelPlayer.exe --dub --media <path> [--lang <code>] [--out <dir>]
-  [--tts <provider>] [--voice <id>] [--no-diarization] [--no-mp4]
-  [--consent-clone]
+  [--tts <provider>] [--voice <id>] [--project-dir <dir>]
+  [--no-diarization] [--no-mp4] [--consent-clone]
 ```
+
+`--project-dir <dir>` stores the run's session (snapshot, transcripts,
+translations) in `<dir>/sessions` so the working state travels with the
+project instead of staying in machine-local app data. Settings, credentials,
+and recent-session history stay app-local.
 
 Examples:
 
@@ -33,7 +38,8 @@ providers, voice, language, segment count, timestamps, and exit code.
 
 ```text
 BabelPlayer.exe --tui [--media <path>] [--lang <code>] [--tts <provider>]
-  [--voice <id>] [--out <dir>] [--no-diarization] [--no-mp4] [--consent-clone]
+  [--voice <id>] [--out <dir>] [--project-dir <dir>]
+  [--no-diarization] [--no-mp4] [--consent-clone]
 ```
 
 Staged setup asks only for what the flags did not answer, prints the effective

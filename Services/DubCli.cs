@@ -51,12 +51,13 @@ public static class DubCli
         string? outDir = BenchmarkCli.GetArg(args, "--out");
         string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
         string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
+        string? projectDir = BenchmarkCli.GetArg(args, "--project-dir");
         bool noDiarization = HasFlag(args, "--no-diarization");
         bool noMp4 = HasFlag(args, "--no-mp4");
         bool consentClone = HasFlag(args, "--consent-clone");
         bool keepRenders = HasFlag(args, "--keep-renders");
 
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
+        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -75,6 +76,12 @@ public static class DubCli
         if (!File.Exists(media))
         {
             Console.Error.WriteLine($"[dub] Media file not found: {media}");
+            return ExitArgumentError;
+        }
+
+        if (projectDir is not null && !IsValidProjectDir(projectDir))
+        {
+            Console.Error.WriteLine($"[dub] Invalid project directory: {projectDir}");
             return ExitArgumentError;
         }
 
@@ -143,8 +150,9 @@ public static class DubCli
             Console.WriteLine($"[dub] diarization  : {(string.IsNullOrEmpty(settings.DiarizationProvider) ? "off" : settings.DiarizationProvider)}");
             Console.WriteLine();
 
-            var perSessionStore = new PerSessionSnapshotStore(
-                Path.Combine(appDataRoot, "sessions"), log);
+            var sessionsRoot = ResolveSessionsRoot(appDataRoot, projectDir);
+            Console.WriteLine($"[dub] sessions    : {sessionsRoot}");
+            var perSessionStore = new PerSessionSnapshotStore(sessionsRoot, log);
             var recentStore = new RecentSessionsStore(
                 Path.Combine(appDataRoot, "state", "recent-sessions.json"), log);
 
@@ -170,7 +178,7 @@ public static class DubCli
 
             coordinator = DependencyLocator.CreateSessionCoordinator(
                 log, settings, perSessionStore, recentStore, apiKeyStore, transportManager,
-                appDataRoot, log, out _);
+                ResolveStateRoot(appDataRoot, projectDir), log, out _);
 
             Console.WriteLine("[dub] loading media…");
             coordinator.LoadMedia(media);
@@ -406,6 +414,40 @@ public static class DubCli
     private static bool HasFlag(string[] args, string flag) =>
         args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Session storage root for a headless run: the portable project directory
+    /// when <c>--project-dir</c> is given (a <c>sessions</c> folder is created
+    /// inside it so snapshot, transcripts, and translations travel with the
+    /// project), otherwise the machine-local app data sessions folder.
+    /// </summary>
+    internal static string ResolveSessionsRoot(string appDataRoot, string? projectDir) =>
+        string.IsNullOrWhiteSpace(projectDir)
+            ? Path.Combine(appDataRoot, "sessions")
+            : Path.Combine(Path.GetFullPath(projectDir.Trim()), "sessions");
+
+    /// <summary>
+    /// State directory for current session snapshot: project-local when <c>--project-dir</c> is
+    /// given (so session state is isolated per-project), otherwise the machine-local app data
+    /// state folder.
+    /// </summary>
+    internal static string ResolveStateRoot(string appDataRoot, string? projectDir) =>
+        string.IsNullOrWhiteSpace(projectDir)
+            ? Path.Combine(appDataRoot, "state")
+            : Path.Combine(Path.GetFullPath(projectDir.Trim()), "sessions", "state");
+
+    internal static bool IsValidProjectDir(string projectDir)
+    {
+        try
+        {
+            _ = Path.GetFullPath(projectDir);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or SecurityException)
+        {
+            return false;
+        }
+    }
+
     private static string Trim(string value) =>
         value.Length <= 25 ? value : value[..22] + "…";
 
@@ -440,6 +482,7 @@ public static class DubCli
         Console.WriteLine("  --no-diarization        Skip diarization for this run");
         Console.WriteLine("  --no-mp4                Skip MP4 export (SRT + MP3 only)");
         Console.WriteLine("  --consent-clone         Grant voice-cloning consent for this run");
+        Console.WriteLine("  --project-dir <dir>     Portable session storage (default: app-local)");
         Console.WriteLine("  --keep-renders          Keep intermediate render files for debugging");
         Console.WriteLine("  --help, -h              Show this help");
         Console.WriteLine();
