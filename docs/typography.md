@@ -149,7 +149,7 @@ Using `DynamicResource` (not `StaticResource`) is required so the values resolve
            Text="{Binding StatusMessage}" />
 ```
 
-See `docs/design-system-audit.md` and `docs/design-system-handoff.md` for the colour token inventory.
+See `docs/history/design/design-system-audit.md` and `docs/history/design/design-system-handoff.md` for the colour token inventory.
 
 ---
 

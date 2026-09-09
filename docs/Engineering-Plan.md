@@ -99,6 +99,6 @@ See [Next-Priorities-2026-04-16.md](Next-Priorities-2026-04-16.md) for the short
 
 These files are preserved for chronology and evidence, not as current status:
 
-- [Remaining-Implementation-Plan-2026-04-12.md](Remaining-Implementation-Plan-2026-04-12.md)
-- [Milestones-Tracker-2026-04-08.md](Milestones-Tracker-2026-04-08.md)
+- [Remaining-Implementation-Plan-2026-04-12.md](history/planning/Remaining-Implementation-Plan-2026-04-12.md)
+- [Milestones-Tracker-2026-04-08.md](history/planning/Milestones-Tracker-2026-04-08.md)
 - [history/smoke/](history/smoke/)

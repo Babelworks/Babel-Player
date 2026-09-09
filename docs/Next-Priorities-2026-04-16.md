@@ -8,7 +8,7 @@ Short owner intent list for upcoming engineering work. For overall project statu
 
 **Context:** Tier 1 delivered the inference execution boundary (`IInferenceExecutionEngine`), stage orchestrators, pipeline state machine, and related coordinator slim-down. Tier 2 is the **next tranche** of Gordon’s refactor plan (execution/architecture follow-on).
 
-**Note on naming:** This is **not** the same as the older “Tier 2 = EmbeddedPlayback ViewModel decomposition” item in `Remaining-Implementation-Plan-2026-04-12.md` — that VM work is already done (`Engineering-Plan.md` Phase 6.1b).
+**Note on naming:** This is **not** the same as the older “Tier 2 = EmbeddedPlayback ViewModel decomposition” item in `history/planning/Remaining-Implementation-Plan-2026-04-12.md` — that VM work is already done (`Engineering-Plan.md` Phase 6.1b).
 
 **Action:** Implement Tier 2 per the maintained Gordon plan (whatever Tier 2 is in that plan: e.g. deeper seams, cancellation, telemetry, or further coordinator decomposition — follow the plan doc, do not rename tiers here).
 

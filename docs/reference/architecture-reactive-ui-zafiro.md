@@ -3,7 +3,7 @@
 > **Status:** Draft / Feasibility Study (not adopted)
 > **Written:** 2026-09-09
 > **Target:** v1.4+ Settings density and custom timeline canvas
-> **Core tenet compliance:** Subordinate to `docs/architecture.md` and `docs/babel-2.0-tenets.md`. This file does not authorize package adds or ViewModel rewrites.
+> **Core tenet compliance:** Subordinate to `docs/architecture.md` and `docs/reference/babel-2.0-tenets.md`. This file does not authorize package adds or ViewModel rewrites.
 
 This document is a field study of whether ReactiveUI (with `ReactiveUI.SourceGenerators`) and `Zafiro.Avalonia` should enter the presentation layer. It is not current architecture. `docs/architecture.md` remains the structural source of truth. Do not treat the blueprints below as permission to introduce a second MVVM stack.
 
@@ -17,7 +17,7 @@ This document is a field study of whether ReactiveUI (with `ReactiveUI.SourceGen
 | Add `Zafiro.Avalonia` for Settings / commands / wizards | **Conditional Go later; No-Go for Milestone A** | 53.3.1 floors Avalonia **12.0.4**, pins ReactiveUI 23.2.28 / `ReactiveUI.Avalonia` 11.4.13, and pulls CSharpFunctionalExtensions, ReactiveProperty, Serilog, and Xaml.Behaviors. Single maintainer (SuperJMN). Avalonia 12 support itself is real (upstream migration commits) |
 | Replace CommunityToolkit ViewModels wholesale | **No-Go** | `SettingsViewModel` and `EmbeddedPlaybackViewModel` are already toolkit-generated; a rewrite does not serve the product chain |
 
-Milestone A in `docs/agent-handoff.md` (Settings checkbox for `ChatterboxVoiceCloneConsent`) does not require either toolkit. The live two-way checkbox already exists on the main window. Settings can host a duplicate draft toggle with the existing `[ObservableProperty]` + `Apply()` path.
+Milestone A in `docs/history/handoffs/agent-handoff.md` (Settings checkbox for `ChatterboxVoiceCloneConsent`) does not require either toolkit. The live two-way checkbox already exists on the main window. Settings can host a duplicate draft toggle with the existing `[ObservableProperty]` + `Apply()` path.
 
 `IEnhancedCommand` (verified in Zafiro.UI) extends `IReactiveCommand` with `IsExecuting`, `CanExecute`, `Name`, and `Text`. Result-typed overloads (`.AsResult()`, `CreateWithResult`) require CSharpFunctionalExtensions in the ViewModel adapter. There is still no progress-float or status-string channel on the command itself. Percent-complete lives in Zafiro's separate Jobs/Actions types (`IJob` / `IExecution` / `LongProgress`) or, as we already do, in `IProgress<PipelineStageUpdate>` on `EmbeddedPlaybackPipelineViewModel`. Zafiro cannot delete that tracking.
 
@@ -43,7 +43,7 @@ The seam is therefore **source-level**, not compile-time:
 
 - Headless drivers and inference workers must not construct ReactiveUI views, `WhenActivated` scopes, Zafiro shells, or Avalonia dispatchers.
 - Adding `ReactiveUI.Avalonia` or `Zafiro.Avalonia` still copies those assemblies next to `BabelPlayer.exe`. `--dub` will load the same WinExe. That is acceptable only if those types are never touched on the headless path.
-- Tenet 8 (`docs/babel-2.0-tenets.md`) wants compiled architecture tests for dependency direction. A future split (presentation project vs headless core) would make the seam real. Do not pretend the split exists today.
+- Tenet 8 (`docs/reference/babel-2.0-tenets.md`) wants compiled architecture tests for dependency direction. A future split (presentation project vs headless core) would make the seam real. Do not pretend the split exists today.
 
 ### 1.2 Data and control flow topology map
 

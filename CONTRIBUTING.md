@@ -5,6 +5,7 @@
 Read these before non-trivial work:
 
 - [AGENTS.md](AGENTS.md)
+- [AGENTS.md](AGENTS.md)
 - [docs/AI-CONTEXT.md](docs/AI-CONTEXT.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/PLAN.md](docs/PLAN.md)

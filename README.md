@@ -243,6 +243,10 @@ Canonical repo docs:
 - [docs/PLAN.md](docs/PLAN.md) — documentation map, current status, and retired-plan index
 - [docs/Engineering-Plan.md](docs/Engineering-Plan.md) — current engineering status and active follow-up
 - [docs/Next-Priorities-2026-04-16.md](docs/Next-Priorities-2026-04-16.md) — short active worklist
+- [docs/headless-cli.md](docs/headless-cli.md) — headless `--dub` / `--tui`
+- [docs/containers.md](docs/containers.md) — containers / WSL / GPU hosting
+- [docs/privacy-policy.md](docs/privacy-policy.md) — privacy policy
+- [docs/model-audits/sortformer.md](docs/model-audits/sortformer.md) — SortFormer model audit
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contributor workflow
 
 Historical milestone evidence lives under [docs/history/](docs/history/).

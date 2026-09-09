@@ -34,8 +34,8 @@ You are not blocked by deleting old Azure folders. This repo does not currently 
 
 There are two important repo facts to understand before you do anything:
 
-1. The app already has an external inference-host seam through `EffectiveContainerizedServiceUrl` in [AppSettings.cs](/D:/Dev/Babel-Player/Services/Settings/AppSettings.cs:205).
-2. The current FastAPI worker is not safe to expose publicly yet. The code explicitly warns that its endpoints are unauthenticated and intended for local or otherwise trusted callers in [inference/main.py](/D:/Dev/Babel-Player/inference/main.py:3205).
+1. The app already has an external inference-host seam through `EffectiveContainerizedServiceUrl` in [AppSettings.cs](Services/Settings/AppSettings.cs).
+2. The current FastAPI worker is not safe to expose publicly yet. The code explicitly warns that its endpoints are unauthenticated and intended for local or otherwise trusted callers in [inference/main.py](inference/main.py).
 
 Because of that, this checklist is split into:
 
@@ -52,7 +52,7 @@ Recommended layout:
   - Handles sign-in, entitlement checks, and short-lived token issuance
 - `babel-qwen-worker`
   - GPU Azure Container App
-  - Runs the FastAPI worker from [inference/main.py](/D:/Dev/Babel-Player/inference/main.py:1609)
+  - Runs the FastAPI worker from [inference/main.py](inference/main.py)
   - Validates short-lived premium tokens on every Qwen request
 
 Supporting Azure resources:
@@ -249,7 +249,7 @@ az role assignment list --assignee-object-id $MI_PRINCIPAL --scope $KV_ID --quer
 
 The current worker image will not build until these files exist in `inference/`.
 
-The Dockerfile explicitly expects them at [inference/Dockerfile](/D:/Dev/Babel-Player/inference/Dockerfile:28).
+The Dockerfile explicitly expects them at [inference/Dockerfile](inference/Dockerfile).
 
 Run:
 
@@ -294,7 +294,7 @@ Do not create a public Azure Container App for the current worker yet.
 Reason:
 
 - The worker is currently designed for local/private use
-- The code itself says non-loopback hosting is unsafe without auth at [inference/main.py](/D:/Dev/Babel-Player/inference/main.py:3205)
+- The code itself says non-loopback hosting is unsafe without auth at [inference/main.py](inference/main.py)
 
 At this point, your Azure-side work is paused until the repo gets the missing auth and entitlement pieces.
 
@@ -441,7 +441,7 @@ Requirements:
 - External ingress enabled only after auth is in place
 - Azure Files mount for model cache persistence
 
-The worker image exposes port `8001` and its health endpoint is `/health/live` according to [inference/Dockerfile](/D:/Dev/Babel-Player/inference/Dockerfile:60).
+The worker image exposes port `8001` and its health endpoint is `/health/live` according to [inference/Dockerfile](inference/Dockerfile).
 
 #### Portal path
 
@@ -491,13 +491,13 @@ Persist at least:
 
 ### Step 18: Point the Desktop App at the Hosted Worker
 
-After the repo changes exist, wire the desktop app to the hosted worker using the existing external-host seam in [AppSettings.cs](/D:/Dev/Babel-Player/Services/Settings/AppSettings.cs:205).
+After the repo changes exist, wire the desktop app to the hosted worker using the existing external-host seam in [AppSettings.cs](Services/Settings/AppSettings.cs).
 
 This should be explicit and user-visible, not a silent redirect from the local provider.
 
 #### Repo seam
 
-The current seam for an external host already exists in [AppSettings.cs](/D:/Dev/Babel-Player/Services/Settings/AppSettings.cs:205). The premium/cloud flow should use that seam after the repo-side premium support is added.
+The current seam for an external host already exists in [AppSettings.cs](Services/Settings/AppSettings.cs). The premium/cloud flow should use that seam after the repo-side premium support is added.
 
 ### Step 19: Test the Full Premium Flow
 
@@ -554,10 +554,10 @@ If ACA GPU quota blocks you, the fallback is not to throw away the plan. It is t
 
 ## Reference Files in This Repo
 
-- External inference host seam: [AppSettings.cs](/D:/Dev/Babel-Player/Services/Settings/AppSettings.cs:205)
-- Worker Docker image: [inference/Dockerfile](/D:/Dev/Babel-Player/inference/Dockerfile:1)
-- Worker safety note for non-loopback bind: [inference/main.py](/D:/Dev/Babel-Player/inference/main.py:3205)
-- Container/inference host overview: [docs/containers.md](/D:/Dev/Babel-Player/docs/containers.md:1)
+- External inference host seam: [AppSettings.cs](Services/Settings/AppSettings.cs)
+- Worker Docker image: [inference/Dockerfile](inference/Dockerfile)
+- Worker safety note for non-loopback bind: [inference/main.py](inference/main.py)
+- Container/inference host overview: [docs/containers.md](docs/containers.md)
 
 ## Current Recommended Next Move
 
