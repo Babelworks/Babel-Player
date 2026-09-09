@@ -207,7 +207,9 @@ public sealed class FfmpegAudioProcessingService(AppLog log) : IAudioProcessingS
         }
 
         var mixedInputs = string.Concat(Enumerable.Range(0, segments.Count).Select(index => $"[s{index}]"));
-        filterParts.Add($"{mixedInputs}amix=inputs={segments.Count}:normalize=0:dropout_transition=0[outa]");
+        var spanEndSeconds = segments.Max(static segment => segment.StartSeconds + segment.SegmentDurationSeconds);
+        var spanEnd = spanEndSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+        filterParts.Add($"{mixedInputs}amix=inputs={segments.Count}:normalize=0:dropout_transition=0[mixed];[mixed]apad=whole_dur={spanEnd}[outa]");
 
         psi.ArgumentList.Add("-filter_complex");
         psi.ArgumentList.Add(string.Join(";", filterParts));

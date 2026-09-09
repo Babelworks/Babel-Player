@@ -133,8 +133,16 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         return _sessions;
     }
 
-    private static InferenceSession CreateSession(string modelPath) =>
-        new(modelPath, new SessionOptions());
+    private static InferenceSession CreateSession(string modelPath)
+    {
+        var options = new SessionOptions
+        {
+            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
+            InterOpNumThreads = 1,
+            IntraOpNumThreads = 1,
+        };
+        return new InferenceSession(modelPath, options);
+    }
 
     private static ChatterboxGenerationResult GenerateSpeechTokens(
         long[] textInputIds,
