@@ -30,4 +30,15 @@ public sealed class DubProjectDirTests
         Assert.True(DubCli.IsValidProjectDir("some-dir"));
         Assert.False(DubCli.IsValidProjectDir("a\0b"));
     }
+
+    [Fact]
+    public void ResolveStateRoot_IsolatesCurrentSessionPerProject()
+    {
+        Assert.Equal(
+            Path.Combine("appdata", "state"),
+            DubCli.ResolveStateRoot("appdata", null));
+        Assert.Equal(
+            Path.Combine(Path.GetFullPath("proj"), "sessions", "state"),
+            DubCli.ResolveStateRoot("appdata", "proj"));
+    }
 }

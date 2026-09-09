@@ -177,7 +177,7 @@ public static class DubCli
 
             coordinator = DependencyLocator.CreateSessionCoordinator(
                 log, settings, perSessionStore, recentStore, apiKeyStore, transportManager,
-                appDataRoot, log, out _);
+                ResolveStateRoot(appDataRoot, projectDir), log, out _);
 
             Console.WriteLine("[dub] loading media…");
             coordinator.LoadMedia(media);
