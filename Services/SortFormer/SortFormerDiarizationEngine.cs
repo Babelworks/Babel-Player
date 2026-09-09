@@ -141,6 +141,18 @@ public sealed class SortFormerDiarizationEngine : IDisposable
 
             int validModelFrameCount = CeilingDivide(currentFeatureFrameCount, StreamingFeatureSubsampling);
             int keepModelFrameCount = Math.Min(StreamingChunkModelFrames, validModelFrameCount);
+            // NeMo streaming_update refreshes FIFO activity from this step's full prediction
+            // tensor before appending the new chunk (preds[:, spkcache:spkcache+fifo]).
+            if (state.FifoFrameCount > 0)
+            {
+                float[] refreshedFifoPredictions = ExtractTensorFrameSlice(
+                    rawPredictions,
+                    state.SpeakerCacheFrameCount,
+                    state.FifoFrameCount,
+                    speakerCount);
+                state.RefreshFifoPredictions(refreshedFifoPredictions);
+            }
+
             int predictionStartFrame = state.SpeakerCacheFrameCount + state.FifoFrameCount;
             float[] chunkPredictions = ExtractTensorFrameSlice(
                 rawPredictions,
@@ -159,8 +171,7 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 chunkEmbeddings,
                 keepModelFrameCount,
                 chunkPredictions,
-                speakerCount,
-                validModelFrameCount);
+                speakerCount);
         }
 
         int frameCount = predictionData.Count / speakerCount;
@@ -660,12 +671,27 @@ public sealed class SortFormerDiarizationEngine : IDisposable
         public float[] MeanSilenceEmbedding { get; private set; } = new float[StreamingEmbeddingDimension];
         public int SilenceFrameCount { get; private set; }
 
+        public void RefreshFifoPredictions(float[] predictions)
+        {
+            if (FifoFrameCount <= 0)
+                return;
+
+            ArgumentNullException.ThrowIfNull(predictions);
+            if (predictions.Length != FifoPredictions.Length)
+            {
+                throw new ArgumentException(
+                    $"FIFO prediction refresh expected {FifoPredictions.Length} values but received {predictions.Length}.",
+                    nameof(predictions));
+            }
+
+            FifoPredictions = predictions;
+        }
+
         public void Update(
             float[] chunkEmbeddings,
             int chunkEmbeddingFrameCount,
             float[] chunkPredictions,
-            int speakerCount,
-            int validChunkFrameCount)
+            int speakerCount)
         {
             if (chunkEmbeddingFrameCount <= 0 || speakerCount <= 0)
                 return;
@@ -693,9 +719,11 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 return;
             }
 
+            // Pop by appended embedding frames only. validChunkFrameCount includes the one
+            // right-context frame that is never appended to the FIFO (NeMo chunk_len).
             int popOutFrameCount = Math.Max(
                 StreamingChunkModelFrames,
-                validChunkFrameCount - StreamingFifoFrames + previousFifoFrameCount);
+                chunkEmbeddingFrameCount - StreamingFifoFrames + previousFifoFrameCount);
             popOutFrameCount = Math.Min(popOutFrameCount, combinedFifoFrameCount);
 
             float[] popOutEmbeddings = SliceFrames(
