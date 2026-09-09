@@ -94,6 +94,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                 transcriptPartialPath,
                 _c.CurrentSession.SourceLanguage ?? "unknown",
                 0d);
+            transcriptArtifactWriter.ResetJournal();
             await transcriptArtifactWriter.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
             var transcriptChannel = Channel.CreateBounded<TranscriptChannelItem>(new BoundedChannelOptions(8)
