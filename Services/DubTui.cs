@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Babel.Player.Models;
+using Babel.Player.Models.LanguageSupport;
+using Babel.Player.Services.Settings;
 
 namespace Babel.Player.Services;
 
@@ -30,19 +32,84 @@ public static class DubTui
         ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".opus", ".wma",
     ];
 
-    private static readonly string[] TargetLanguages =
-    [
-        "ar", "de", "en", "es", "fr", "hi", "it", "ja",
-        "ko", "nl", "pl", "pt", "ru", "sv", "tr", "zh",
-    ];
+    private static readonly HashSet<string> AudioOnlyExtensions =
+    new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".opus", ".wma",
+    };
 
     private static readonly (string Id, string Label)[] TtsChoices =
     [
         ("", "Use settings default"),
-        ("piper", "Piper (local CPU voices)"),
-        ("chatterbox", "Chatterbox (voice cloning, local)"),
-        ("edge-tts", "Edge TTS (cloud, no key needed)"),
+        (ProviderNames.Piper, "Piper (local CPU voices)"),
+        (ProviderNames.Chatterbox, "Chatterbox (voice cloning, local)"),
+        (ProviderNames.EdgeTts, "Edge TTS (cloud, no key needed)"),
     ];
+
+    internal static IReadOnlyList<string> TargetLanguages => NllbLanguageCatalog.IsoCodes;
+
+    internal static bool IsAudioOnlyMedia(string mediaPath) =>
+        AudioOnlyExtensions.Contains(Path.GetExtension(mediaPath));
+
+    internal static bool IsSupportedTargetLanguage(string code) =>
+        !string.IsNullOrWhiteSpace(code) &&
+        NllbLanguageCatalog.IsoToFloresToken.ContainsKey(code.Trim().ToLowerInvariant());
+
+    internal static string ResolveEffectiveTtsProvider(string? ttsChoice)
+    {
+        if (!string.IsNullOrWhiteSpace(ttsChoice))
+            return ttsChoice.Trim().ToLowerInvariant();
+
+        try
+        {
+            var settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "BabelPlayer", "settings", "app-settings.json");
+            if (File.Exists(settingsPath))
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
+                if (document.RootElement.TryGetProperty("TtsProvider", out var value) &&
+                    value.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(value.GetString()))
+                    return value.GetString()!.Trim().ToLowerInvariant();
+            }
+        }
+        catch (Exception)
+        {
+            // Fall through to the compiled default below.
+        }
+
+        return new AppSettings().TtsProvider.Trim().ToLowerInvariant();
+    }
+
+    internal static bool RequiresCloneConsent(string? ttsChoice) =>
+        string.Equals(
+            ResolveEffectiveTtsProvider(ttsChoice),
+            ProviderNames.Chatterbox,
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static string[] BuildDubArgv(
+        string media,
+        string lang,
+        string? tts,
+        bool diarization,
+        bool mp4,
+        string? outDir,
+        bool consentClone)
+    {
+        var argv = new List<string> { "--dub", "--media", media, "--lang", lang };
+        if (!string.IsNullOrEmpty(tts))
+            argv.AddRange(["--tts", tts]);
+        if (!diarization)
+            argv.Add("--no-diarization");
+        if (!mp4)
+            argv.Add("--no-mp4");
+        if (!string.IsNullOrWhiteSpace(outDir))
+            argv.AddRange(["--out", outDir]);
+        if (consentClone)
+            argv.Add("--consent-clone");
+        return argv.ToArray();
+    }
 
     public static async Task<int> RunAsync(
         string[] args,
@@ -126,11 +193,11 @@ public static class DubTui
             return;
 
         bool diarization = Confirm("Enable speaker diarization?", defaultYes: false);
-        bool mp4 = Confirm("Export MP4 video?", defaultYes: true);
+        bool mp4 = Confirm("Export MP4 video?", defaultYes: !IsAudioOnlyMedia(media));
         string outDir = PromptText("Output directory (empty = alongside media)", string.Empty);
 
         bool consentClone = false;
-        if (string.Equals(tts, "chatterbox", StringComparison.OrdinalIgnoreCase))
+        if (RequiresCloneConsent(tts))
         {
             Console.WriteLine("Chatterbox performs voice cloning, which requires explicit consent.");
             consentClone = Confirm("Grant voice-cloning consent for this run?", defaultYes: false);
@@ -141,22 +208,12 @@ public static class DubTui
             }
         }
 
-        var argv = new List<string> { "--dub", "--media", media, "--lang", lang };
-        if (!string.IsNullOrEmpty(tts))
-            argv.AddRange(["--tts", tts]);
-        if (!diarization)
-            argv.Add("--no-diarization");
-        if (!mp4)
-            argv.Add("--no-mp4");
-        if (!string.IsNullOrWhiteSpace(outDir))
-            argv.AddRange(["--out", outDir]);
-        if (consentClone)
-            argv.Add("--consent-clone");
+        var argv = BuildDubArgv(media, lang, tts, diarization, mp4, outDir, consentClone);
 
         Console.WriteLine();
         Console.WriteLine($"[tui] launching: BabelPlayer.exe {string.Join(" ", argv.Select(Quote))}");
         Console.WriteLine();
-        int exitCode = await DubCli.RunAsync(argv.ToArray(), cancellationToken).ConfigureAwait(false);
+        int exitCode = await DubCli.RunAsync(argv, cancellationToken).ConfigureAwait(false);
         Console.WriteLine();
         Console.WriteLine(exitCode switch
         {
@@ -172,10 +229,42 @@ public static class DubTui
         while (true)
         {
             string directory = Directory.GetCurrentDirectory();
-            var files = Directory.GetFiles(directory)
-                .Where(f => MediaExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-                .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directory)
+                    .Where(f => MediaExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                Console.Error.WriteLine($"[tui] Cannot list {directory}: {ex.Message}");
+                Console.WriteLine("  (type a different directory or full path; empty cancels)");
+                string recovery = PromptText("Media", string.Empty).Trim();
+                if (string.IsNullOrEmpty(recovery))
+                    return null;
+                if (Directory.Exists(recovery))
+                {
+                    try
+                    {
+                        Directory.SetCurrentDirectory(recovery);
+                    }
+                    catch (Exception setEx) when (setEx is UnauthorizedAccessException or IOException)
+                    {
+                        Console.Error.WriteLine($"[tui] Cannot enter {recovery}: {setEx.Message}");
+                    }
+                }
+                else if (File.Exists(recovery))
+                {
+                    return Path.GetFullPath(recovery);
+                }
+                else
+                {
+                    Console.WriteLine("Not found. Try a valid path.");
+                }
+                continue;
+            }
 
             Console.WriteLine();
             Console.WriteLine($"Media files in {directory}:");
@@ -197,7 +286,14 @@ public static class DubTui
                 return Path.GetFullPath(candidate);
             if (Directory.Exists(candidate))
             {
-                Directory.SetCurrentDirectory(candidate);
+                try
+                {
+                    Directory.SetCurrentDirectory(candidate);
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+                {
+                    Console.Error.WriteLine($"[tui] Cannot enter {candidate}: {ex.Message}");
+                }
                 continue;
             }
 
@@ -211,7 +307,7 @@ public static class DubTui
         {
             Console.WriteLine();
             Console.WriteLine("Target language:");
-            for (int index = 0; index < TargetLanguages.Length; index++)
+            for (int index = 0; index < TargetLanguages.Count; index++)
             {
                 var code = TargetLanguages[index];
                 Console.WriteLine($"  {index + 1}) {code} - {LanguageDisplayNames.ForIso639(code, CultureInfo.InvariantCulture)}");
@@ -222,11 +318,11 @@ public static class DubTui
             if (string.IsNullOrEmpty(input))
                 return null;
 
-            if (int.TryParse(input, out int number) && number >= 1 && number <= TargetLanguages.Length)
+            if (int.TryParse(input, out int number) && number >= 1 && number <= TargetLanguages.Count)
                 return TargetLanguages[number - 1];
 
-            string typedCode = input.ToLowerInvariant();
-            if (TargetLanguages.Contains(typedCode))
+            string typedCode = input.Trim().ToLowerInvariant();
+            if (IsSupportedTargetLanguage(typedCode))
                 return typedCode;
 
             Console.WriteLine("Unknown language. Pick a listed number or code.");
@@ -243,7 +339,7 @@ public static class DubTui
                 Console.WriteLine($"  {index + 1}) {TtsChoices[index].Label}");
             Console.WriteLine("  (empty cancels)");
 
-            string input = PromptText("TTS provider", "1").Trim();
+            string input = PromptText("TTS provider", string.Empty).Trim();
             if (string.IsNullOrEmpty(input))
                 return null;
 
