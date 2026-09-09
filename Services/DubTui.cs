@@ -49,7 +49,7 @@ public static class DubTui
     internal static IReadOnlyList<string> TargetLanguages => NllbLanguageCatalog.IsoCodes;
 
     internal static bool IsAudioOnlyMedia(string mediaPath) =>
-        AudioOnlyExtensions.Contains(Path.GetExtension(mediaPath));
+        !string.IsNullOrEmpty(mediaPath) && AudioOnlyExtensions.Contains(Path.GetExtension(mediaPath));
 
     internal static bool IsSupportedTargetLanguage(string code) =>
         !string.IsNullOrWhiteSpace(code) &&
@@ -74,7 +74,7 @@ public static class DubTui
                     return value.GetString()!.Trim().ToLowerInvariant();
             }
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             // Fall through to the compiled default below.
         }
@@ -370,11 +370,10 @@ public static class DubTui
 
         try
         {
-            var lines = File.ReadAllLines(logPath);
-            foreach (var line in lines.Skip(Math.Max(0, lines.Length - 40)))
-                Console.WriteLine(line);
+foreach (var line in File.ReadLines(logPath).TakeLast(40))
+    Console.WriteLine(line);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
             Console.Error.WriteLine($"[tui] Could not read log: {ex.Message}");
         }
@@ -408,7 +407,7 @@ public static class DubTui
                     Console.WriteLine($"  {key}: {value}");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"[tui] Could not read settings: {ex.Message}");
         }
