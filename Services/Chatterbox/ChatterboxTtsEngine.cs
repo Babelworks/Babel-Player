@@ -20,14 +20,13 @@ internal sealed class ChatterboxTtsEngine : IDisposable
     private const long StopTextToken = 0;
     private const long EndOfTextToken = 50256;
     private const long SilenceToken = 4299;
-    private const int MaxNewTokens = 256;
+    private const int MaxNewTokens = ChatterboxSampling.MaxNewTokens;
     private const int MinimumDurationBudgetNewTokens = 128;
     private const double SpeechTokensPerSecond = 25.0d;
     private const double DurationBudgetMultiplier = 1.75d;
     private const double DurationBudgetSlackSeconds = 2.0d;
     private const int NumKvHeads = 16;
     private const int HeadDim = 64;
-    private const float RepetitionPenalty = 1.2f;
 
     private readonly AppLog _log;
     private readonly string _modelDir;
@@ -62,7 +61,9 @@ internal sealed class ChatterboxTtsEngine : IDisposable
             ThrowIfDisposed();
             var sessions = GetOrCreateSessions(modelFiles);
 
-            var normalizedText = NormalizeTextForLanguage(text, languageCode);
+            var normalizedText = NormalizeTextForLanguage(
+                ChatterboxSampling.NormalizePromptText(text),
+                languageCode);
             var conditionedText = ApplyMultilingualLanguagePrefix(normalizedText, languageCode, modelFiles.IsMultilingual);
             var inputIds = BuildTextInputIds(conditionedText, sessions.Tokenizer, modelFiles.IsTurbo);
             var generation = GenerateSpeechTokens(
@@ -77,6 +78,9 @@ internal sealed class ChatterboxTtsEngine : IDisposable
                 generation,
                 sessions.ConditionalDecoder,
                 modelFiles.IsTurbo);
+            _log.Info(
+                $"Chatterbox synthesized {generation.GeneratedTokens.Length - 1} speech tokens " +
+                $"(stop={generation.StoppedOnEos}) for '{conditionedText[..Math.Min(48, conditionedText.Length)]}'.");
             return ChatterboxAudio.EncodeMonoPcm16(audioSamples, SampleRate);
         }
         finally
@@ -120,7 +124,7 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         }
 
         _sessions?.Dispose();
-        _log.Info($"Loading Chatterbox sessions from {modelFiles.RootDirectory} (CPU).");
+        _log.Info($"Loading Chatterbox sessions from {modelFiles.RootDirectory} (CPU, {ResolveOnnxIntraOpNumThreads()} threads).");
         var tokenizer = ChatterboxTokenizer.LoadAsync(
             Path.Combine(modelFiles.RootDirectory, "tokenizer.json")).GetAwaiter().GetResult();
         _sessions = new EngineSessions(
@@ -130,16 +134,21 @@ internal sealed class ChatterboxTtsEngine : IDisposable
             CreateSession(modelFiles.EmbedTokensPath),
             CreateSession(modelFiles.LanguageModelPath),
             CreateSession(modelFiles.ConditionalDecoderPath));
+        _log.Info("Chatterbox sessions ready.");
         return _sessions;
     }
 
-    private static InferenceSession CreateSession(string modelPath)
+    internal static int ResolveOnnxIntraOpNumThreads() =>
+        Math.Max(1, Environment.ProcessorCount);
+
+    private InferenceSession CreateSession(string modelPath)
     {
+        _log.Info($"Loading Chatterbox ONNX graph {Path.GetFileName(modelPath)}.");
         var options = new SessionOptions
         {
             ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
             InterOpNumThreads = 1,
-            IntraOpNumThreads = 1,
+            IntraOpNumThreads = ResolveOnnxIntraOpNumThreads(),
         };
         return new InferenceSession(modelPath, options);
     }
@@ -171,18 +180,24 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         float[]? speakerFeatures = null;
         int[]? speakerEmbeddingsDimensions = null;
         int[]? speakerFeaturesDimensions = null;
+        int batchSize = ChatterboxSampling.CfgBatchSize;
+        int sequenceLength = 0;
+        int languagePosition = 0;
+        bool stoppedOnEos = false;
+        float[]? condLogits = null;
+        float[]? uncondLogits = null;
 
         int maxNewTokens = ResolveMaxNewTokens(targetDurationSeconds);
         for (int iteration = 0; iteration < maxNewTokens; iteration++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var textEmbeds = RunEmbedTokens(
+            var tokenEmbeds = RunEmbedTokens(
                 embedTokensSession,
                 currentInputIds,
                 embedPositionIds,
                 embedNeedsExaggeration);
 
-            var inputsEmbeds = textEmbeds;
+            TensorData<float> inputsEmbeds;
             if (iteration == 0)
             {
                 using var speechEncoderInputs = new NamedOnnxValueSet();
@@ -193,7 +208,7 @@ internal sealed class ChatterboxTtsEngine : IDisposable
                     [1, referenceAudio.Length]));
                 using var speechResults = speechEncoderSession.Run(speechEncoderInputs.Values);
                 var outputs = speechResults.ToArray();
-                var condEmbeds = ReadFloatTensor(outputs[0]);
+                var condEmbeds = RepeatBatch(ReadFloatTensor(outputs[0]), batchSize);
                 var promptTensor = outputs[1].AsTensor<long>();
                 promptTokenIds = promptTensor.ToArray();
                 var speakerEmbeddingTensor = ReadFloatTensor(outputs[2]);
@@ -202,17 +217,27 @@ internal sealed class ChatterboxTtsEngine : IDisposable
                 speakerFeatures = speakerFeatureTensor.Values;
                 speakerEmbeddingsDimensions = speakerEmbeddingTensor.Dimensions;
                 speakerFeaturesDimensions = speakerFeatureTensor.Dimensions;
+                var textEmbeds = RepeatBatch(tokenEmbeds, batchSize);
+                ZeroTextConditionForCfg(textEmbeds, batchIndex: 1, preservedSuffixTokens: 2);
                 inputsEmbeds = ConcatenateEmbeddings(condEmbeds, textEmbeds);
-
-                int batchSize = inputsEmbeds.Dimensions[0];
-                int sequenceLength = inputsEmbeds.Dimensions[1];
-                attentionMask = Enumerable.Repeat(1L, checked(batchSize * sequenceLength)).ToArray();
+                sequenceLength = inputsEmbeds.Dimensions[1];
+                languagePosition = sequenceLength;
+                attentionMask = CreateOnesMask(batchSize, sequenceLength);
                 if (languageNeedsPositionIds)
-                    languagePositionIds = Enumerable.Range(0, sequenceLength).Select(static value => (long)value).ToArray();
+                    languagePositionIds = CreatePositionIds(batchSize, sequenceLength, start: 0);
 
                 pastKeyValues = pastKeyNames
                     .Select(name => CreateEmptyPastTensor(name, languageModelSession.InputMetadata[name], batchSize))
                     .ToArray();
+            }
+            else
+            {
+                inputsEmbeds = RepeatBatch(tokenEmbeds, batchSize);
+                sequenceLength++;
+                attentionMask = CreateOnesMask(batchSize, sequenceLength);
+                if (languageNeedsPositionIds)
+                    languagePositionIds = CreatePositionIds(batchSize, 1, start: languagePosition);
+                languagePosition++;
             }
 
             using var languageInputs = new NamedOnnxValueSet();
@@ -223,12 +248,13 @@ internal sealed class ChatterboxTtsEngine : IDisposable
                 inputsEmbeds.Dimensions));
             languageInputs.Add(NamedOnnxValue.CreateFromTensor(
                 "attention_mask",
-                new DenseTensor<long>(attentionMask, [1, attentionMask.Length])));
+                new DenseTensor<long>(attentionMask, [batchSize, sequenceLength])));
             if (languageNeedsPositionIds && languagePositionIds is not null)
             {
+                int positionSequence = languagePositionIds.Length / batchSize;
                 languageInputs.Add(NamedOnnxValue.CreateFromTensor(
                     "position_ids",
-                    new DenseTensor<long>(languagePositionIds, [1, languagePositionIds.Length])));
+                    new DenseTensor<long>(languagePositionIds, [batchSize, positionSequence])));
             }
 
             foreach (var past in pastKeyValues)
@@ -237,18 +263,27 @@ internal sealed class ChatterboxTtsEngine : IDisposable
             using var languageResults = languageModelSession.Run(languageInputs.Values);
             var languageOutputs = languageResults.ToArray();
             var logits = ReadFloatTensor(languageOutputs[0]);
-            long nextToken = SelectNextToken(logits, generatedTokens);
+            int vocabSize = logits.Dimensions[^1];
+            condLogits ??= new float[vocabSize];
+            uncondLogits ??= new float[vocabSize];
+            ChatterboxSampling.CopyLastLogits(logits.Values, logits.Dimensions, 0, condLogits);
+            ChatterboxSampling.CopyLastLogits(logits.Values, logits.Dimensions, 1, uncondLogits);
+            long nextToken = ChatterboxSampling.SampleNextToken(
+                condLogits,
+                uncondLogits,
+                generatedTokens,
+                StopSpeechToken,
+                Random.Shared.NextDouble());
             generatedTokens = generatedTokens.Concat([nextToken]).ToArray();
             if (nextToken == StopSpeechToken)
+            {
+                stoppedOnEos = true;
                 break;
+            }
 
             currentInputIds = [nextToken];
             if (embedNeedsPositionIds)
                 embedPositionIds = [iteration + 1];
-
-            attentionMask = attentionMask.Concat([1L]).ToArray();
-            if (languageNeedsPositionIds && languagePositionIds is not null)
-                languagePositionIds = [languagePositionIds[^1] + 1];
 
             pastKeyValues = languageOutputs
                 .Skip(1)
@@ -279,7 +314,8 @@ internal sealed class ChatterboxTtsEngine : IDisposable
             speakerEmbeddings,
             speakerEmbeddingsDimensions,
             speakerFeatures,
-            speakerFeaturesDimensions);
+            speakerFeaturesDimensions,
+            stoppedOnEos);
     }
 
     private static float[] DecodeSpeechTokens(
@@ -287,10 +323,7 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         InferenceSession decoderSession,
         bool isTurbo)
     {
-        long[] speechTokens = generation.GeneratedTokens
-            .Skip(1)
-            .TakeWhile(static token => token != StopSpeechToken)
-            .ToArray();
+        long[] speechTokens = SelectDecoderSpeechTokens(generation.GeneratedTokens);
         if (isTurbo)
             speechTokens = speechTokens.Concat(Enumerable.Repeat(SilenceToken, 3)).ToArray();
 
@@ -312,6 +345,26 @@ internal sealed class ChatterboxTtsEngine : IDisposable
 
         using var results = decoderSession.Run(inputs.Values);
         return ReadFloatTensor(results.Single()).Values;
+    }
+
+    /// <summary>
+    /// Maps generated LM tokens onto decoder speech tokens.
+    /// Official multilingual ONNX uses <c>generate_tokens[:, 1:-1]</c>: drop the leading
+    /// START_SPEECH token and the trailing token (STOP when the model ended cleanly,
+    /// otherwise an incomplete frame). Filtering STOP first and then dropping another
+    /// token would clip a real speech frame on EOS.
+    /// </summary>
+    internal static long[] SelectDecoderSpeechTokens(IReadOnlyList<long> generatedTokens)
+    {
+        if (generatedTokens.Count <= 1)
+            return [];
+
+        var inner = generatedTokens.Skip(1).ToArray();
+        if (inner.Length == 0)
+            return [];
+
+        inner = inner[..^1];
+        return inner.TakeWhile(static token => token != StopSpeechToken).ToArray();
     }
 
     internal static string ApplyMultilingualLanguagePrefix(
@@ -409,27 +462,57 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         return positionIds;
     }
 
-    private static long SelectNextToken(TensorData<float> logits, IReadOnlyList<long> generatedTokens)
+    private static TensorData<float> RepeatBatch(TensorData<float> source, int batchCount)
     {
-        int vocabularySize = logits.Dimensions[^1];
-        int offset = logits.Values.Length - vocabularySize;
-        long bestToken = 0;
-        float bestScore = float.NegativeInfinity;
-        var seen = generatedTokens.ToHashSet();
-        for (int index = 0; index < vocabularySize; index++)
-        {
-            float score = logits.Values[offset + index];
-            if (seen.Contains(index))
-                score = score < 0f ? score * RepetitionPenalty : score / RepetitionPenalty;
+        if (source.Dimensions.Length != 3)
+            throw new InvalidOperationException("Chatterbox embeddings must be [batch, sequence, hidden].");
+        if (source.Dimensions[0] != 1)
+            throw new InvalidOperationException("CFG batch expansion expects a single source batch.");
+        ArgumentOutOfRangeException.ThrowIfLessThan(batchCount, 1);
 
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestToken = index;
-            }
+        int sequence = source.Dimensions[1];
+        int hidden = source.Dimensions[2];
+        var values = new float[checked(batchCount * sequence * hidden)];
+        for (int batch = 0; batch < batchCount; batch++)
+            Array.Copy(source.Values, 0, values, batch * sequence * hidden, source.Values.Length);
+        return new TensorData<float>(values, [batchCount, sequence, hidden]);
+    }
+
+    private static void ZeroTextConditionForCfg(TensorData<float> tensor, int batchIndex, int preservedSuffixTokens)
+    {
+        if (tensor.Dimensions.Length != 3)
+            throw new InvalidOperationException("Chatterbox embeddings must be [batch, sequence, hidden].");
+        if (batchIndex < 0 || batchIndex >= tensor.Dimensions[0])
+            throw new ArgumentOutOfRangeException(nameof(batchIndex));
+
+        int sequence = tensor.Dimensions[1];
+        int hidden = tensor.Dimensions[2];
+        int zeroTokens = Math.Max(0, sequence - Math.Max(0, preservedSuffixTokens));
+        Array.Clear(tensor.Values, batchIndex * sequence * hidden, zeroTokens * hidden);
+    }
+
+    private static void ZeroBatch(TensorData<float> tensor, int batchIndex)
+    {
+        ZeroTextConditionForCfg(tensor, batchIndex, preservedSuffixTokens: 0);
+    }
+
+    private static long[] CreateOnesMask(int batchSize, int sequenceLength)
+    {
+        var mask = new long[checked(batchSize * sequenceLength)];
+        Array.Fill(mask, 1L);
+        return mask;
+    }
+
+    private static long[] CreatePositionIds(int batchSize, int sequenceLength, int start)
+    {
+        var positions = new long[checked(batchSize * sequenceLength)];
+        for (int batch = 0; batch < batchSize; batch++)
+        {
+            for (int index = 0; index < sequenceLength; index++)
+                positions[(batch * sequenceLength) + index] = start + index;
         }
 
-        return bestToken;
+        return positions;
     }
 
     private static TensorData<float> RunEmbedTokens(
@@ -571,7 +654,8 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         float[] SpeakerEmbeddings,
         int[] SpeakerEmbeddingsDimensions,
         float[] SpeakerFeatures,
-        int[] SpeakerFeaturesDimensions);
+        int[] SpeakerFeaturesDimensions,
+        bool StoppedOnEos);
 
     private sealed class EngineSessions : IDisposable
     {

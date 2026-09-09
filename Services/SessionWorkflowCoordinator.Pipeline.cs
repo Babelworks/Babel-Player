@@ -643,7 +643,10 @@ public sealed partial class SessionWorkflowCoordinator
                     seg.SpeakerId,
                     referenceAudioPath,
                     Language: snapshot.Language,
-                    SourceVideoPath: snapshot.SourceVideoPath),
+                    SourceVideoPath: snapshot.SourceVideoPath,
+                    TargetDurationSeconds: Math.Max(0, seg.End - seg.Start),
+                    SourceStartSeconds: seg.Start,
+                    SourceEndSeconds: seg.End),
                 cancellationToken);
             TrackPendingTtsTask(segTask);
             var segResult = await segTask;

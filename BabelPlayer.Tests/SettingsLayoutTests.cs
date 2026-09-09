@@ -38,6 +38,8 @@ public sealed class SettingsLayoutTests : IDisposable
         Assert.Contains("IsChecked=\"{Binding ShowSegmentsPane, Mode=TwoWay}\"", axaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{local:Localize Settings_Check_ShowSegmentsPane}\"", axaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{local:Localize Settings_Hint_PaneVisibility}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding StoreProjectsNextToMedia}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{local:Localize Settings_Check_StoreProjectsNextToMedia}\"", axaml, StringComparison.Ordinal);
     }
 
     [Fact]

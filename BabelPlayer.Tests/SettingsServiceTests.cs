@@ -168,6 +168,21 @@ public sealed class SettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveAndLoad_StoreProjectsNextToMedia_RoundTrips()
+    {
+        var service = new SettingsService(_settingsPath, _log);
+        Assert.True(new AppSettings().StoreProjectsNextToMedia);
+
+        service.Save(new AppSettings
+        {
+            StoreProjectsNextToMedia = false
+        });
+
+        var loaded = service.LoadOrDefault();
+        Assert.False(loaded.StoreProjectsNextToMedia);
+    }
+
+    [Fact]
     public void SaveAndLoad_PaneLayout_RoundTrips()
     {
         var service = new SettingsService(_settingsPath, _log);

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Babel.Player.Models;
 using Babel.Player.Services;
@@ -85,6 +86,34 @@ public sealed class TranscriptArtifactStreamingWriterTests : IDisposable
         Assert.Equal(2, artifact.Segments!.Count);
         Assert.Equal("Hoy vamos", artifact.Segments[0].Text);
         Assert.Equal("Hola, soy Brenda", artifact.Segments[1].Text);
+    }
+
+    [Fact]
+    public async Task ForwardingWriter_TryComplete_UnblocksTranscriptReader()
+    {
+        var partialPath = Path.Combine(_dir, "clip.partial.json");
+        var artifactWriter = new TranscriptArtifactStreamingWriter(partialPath, "es", 0.99);
+        await artifactWriter.InitializeAsync(CancellationToken.None);
+
+        var channel = Channel.CreateUnbounded<TranscriptChannelItem>();
+        var forwarding = new TranscriptChannelForwardingWriter(artifactWriter, channel.Writer);
+
+        var readTask = Task.Run(async () =>
+        {
+            var count = 0;
+            await foreach (var _ in channel.Reader.ReadAllAsync())
+                count++;
+            return count;
+        });
+
+        await forwarding.WriteAsync(CreateItem(0.0, 8.2, "Hoy vamos"));
+        await forwarding.WriteAsync(CreateItem(8.6, 15.5, "Hola, soy Brenda"));
+        Assert.True(forwarding.TryComplete());
+
+        var count = await readTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, count);
+
+        await artifactWriter.CompleteAsync(CreateResult(), Path.Combine(_dir, "clip.json"), CancellationToken.None);
     }
 
     private static TranscriptChannelItem CreateItem(double start, double end, string text) =>

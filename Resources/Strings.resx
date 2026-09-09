@@ -498,6 +498,12 @@
   <data name="Settings_Check_AutoSave" xml:space="preserve">
     <value>Auto-save session on exit</value>
   </data>
+  <data name="Settings_Check_StoreProjectsNextToMedia" xml:space="preserve">
+    <value>Keep project folders next to media</value>
+  </data>
+  <data name="Settings_Hint_StoreProjectsNextToMedia" xml:space="preserve">
+    <value>Creates a .babel folder beside the video for transcripts, translations, and dub files. Falls back to app data if that folder cannot be written.</value>
+  </data>
   <data name="Settings_Group_AppLanguage" xml:space="preserve">
     <value>App language</value>
   </data>

@@ -94,6 +94,8 @@
                                     <TextBox Grid.Column="1" Grid.Row="0" Text="{Binding MaxRecentSessions, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" VerticalAlignment="Center"/>
                                 </Grid>
                                 <CheckBox IsChecked="{Binding AutoSaveEnabled}" Content="{local:Localize Settings_Check_AutoSave}"/>
+                                <CheckBox IsChecked="{Binding StoreProjectsNextToMedia}" Content="{local:Localize Settings_Check_StoreProjectsNextToMedia}"/>
+                                <TextBlock Text="{local:Localize Settings_Hint_StoreProjectsNextToMedia}" Classes="text-micro" Opacity="0.5" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
 
