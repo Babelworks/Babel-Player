@@ -49,7 +49,7 @@ public static class DubTui
     internal static IReadOnlyList<string> TargetLanguages => NllbLanguageCatalog.IsoCodes;
 
     internal static bool IsAudioOnlyMedia(string mediaPath) =>
-        AudioOnlyExtensions.Contains(Path.GetExtension(mediaPath));
+        !string.IsNullOrEmpty(mediaPath) && AudioOnlyExtensions.Contains(Path.GetExtension(mediaPath));
 
     internal static bool IsSupportedTargetLanguage(string code) =>
         !string.IsNullOrWhiteSpace(code) &&
