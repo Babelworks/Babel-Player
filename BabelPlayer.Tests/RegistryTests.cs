@@ -11,6 +11,7 @@ using Babel.Player.Services;
 using Babel.Player.Services.Credentials;
 using Babel.Player.Services.Registries;
 using Babel.Player.Services.Settings;
+using Babel.Player.Services.SortFormer;
 
 namespace BabelPlayer.Tests;
 
@@ -560,11 +561,11 @@ public sealed class RegistryTests : IDisposable
     }
 
     [Fact]
-    public void DiarizationRegistry_GetAvailableProviders_ReturnsNemoAndWeSpeakerOnly()
+    public void DiarizationRegistry_GetAvailableProviders_ReturnsNemoWeSpeakerAndSortFormer()
     {
         var providers = _diarizationRegistry.GetAvailableProviders();
         Assert.Equal(
-            [ProviderNames.NemoLocal, ProviderNames.WeSpeakerLocal],
+            [ProviderNames.NemoLocal, ProviderNames.WeSpeakerLocal, ProviderNames.SortFormerLocal],
             providers.Select(provider => provider.Id).ToArray());
 
         var nemo = Assert.Single(providers, provider => provider.Id == ProviderNames.NemoLocal);
@@ -574,6 +575,10 @@ public sealed class RegistryTests : IDisposable
         var wespeaker = Assert.Single(providers, provider => provider.Id == ProviderNames.WeSpeakerLocal);
         Assert.Contains(InferenceRuntime.Local, wespeaker.SupportedRuntimes!);
         Assert.Equal(InferenceRuntime.Local, wespeaker.DefaultRuntime);
+
+        var sortFormer = Assert.Single(providers, provider => provider.Id == ProviderNames.SortFormerLocal);
+        Assert.Contains(InferenceRuntime.Local, sortFormer.SupportedRuntimes!);
+        Assert.Equal(InferenceRuntime.Local, sortFormer.DefaultRuntime);
     }
 
     [Fact]
@@ -600,6 +605,17 @@ public sealed class RegistryTests : IDisposable
             null);
 
         Assert.IsType<WeSpeakerCpuDiarizationProvider>(provider);
+    }
+
+    [Fact]
+    public void DiarizationRegistry_CreateProvider_SortFormerLocal_ReturnsSortFormerProvider()
+    {
+        var provider = _diarizationRegistry.CreateProvider(
+            ProviderNames.SortFormerLocal,
+            new AppSettings(),
+            null);
+
+        Assert.IsType<SortFormerDiarizationProvider>(provider);
     }
 
     [Fact]

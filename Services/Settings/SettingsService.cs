@@ -168,6 +168,7 @@ public sealed class SettingsService
         public string? TargetLanguage { get; set; }
         public string? PiperModelDir { get; set; }
         public string? ChatterboxModelDir { get; set; }
+        public string? SortFormerModelDir { get; set; }
         public bool? ChatterboxVoiceCloneConsent { get; set; }
         public GpuHostBackend? PreferredLocalGpuBackend { get; set; }
         public bool? AlwaysStartLocalGpuRuntimeAtAppStart { get; set; }
@@ -261,6 +262,7 @@ public sealed class SettingsService
             settings.TargetLanguage = TargetLanguage ?? settings.TargetLanguage;
             settings.PiperModelDir = PiperModelDir ?? settings.PiperModelDir;
             settings.ChatterboxModelDir = ChatterboxModelDir ?? settings.ChatterboxModelDir;
+            settings.SortFormerModelDir = SortFormerModelDir ?? settings.SortFormerModelDir;
             settings.ChatterboxVoiceCloneConsent = ChatterboxVoiceCloneConsent ?? settings.ChatterboxVoiceCloneConsent;
 
             settings.PreferredLocalGpuBackend = PreferredLocalGpuBackend
@@ -338,6 +340,7 @@ public sealed class SettingsService
             TargetLanguage = settings.TargetLanguage,
             PiperModelDir = settings.PiperModelDir,
             ChatterboxModelDir = settings.ChatterboxModelDir,
+            SortFormerModelDir = settings.SortFormerModelDir,
             ChatterboxVoiceCloneConsent = settings.ChatterboxVoiceCloneConsent,
             PreferredLocalGpuBackend = settings.PreferredLocalGpuBackend,
             AlwaysStartLocalGpuRuntimeAtAppStart = settings.AlwaysStartLocalGpuRuntimeAtAppStart,

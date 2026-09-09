@@ -48,6 +48,7 @@ All packages below are licensed under the MIT License unless otherwise noted.
 | CommunityToolkit.Mvvm | 8.4.2 | MIT | https://github.com/CommunityToolkit/dotnet |
 | Tmds.DBus.Protocol | 0.92.0 | MIT | https://github.com/tmds/Tmds.DBus |
 | System.Security.Cryptography.ProtectedData | 10.0.5 | MIT | https://github.com/dotnet/runtime |
+| MathNet.Numerics | 5.0.0 | MIT | https://github.com/mathnet/mathnet-numerics |
 
 ---
 
@@ -133,6 +134,12 @@ All packages below are licensed under the MIT License unless otherwise noted.
 ### WeSpeaker speaker embeddings
 - **License:** Apache-2.0
 - **Source:** https://github.com/wenet-e2e/wespeaker
+
+### SortFormer streaming diarization (ONNX)
+- **License:** NVIDIA Open Model License
+- **Source:** https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2.1-onnx
+- **Pinned SHA-256:** `82b9c735e1cfc6b36b4ff8a994d9a0573e922d0e80a58a8553b2c58f7aff0c00`
+- **Notes:** CPU ONNX 4-speaker streaming SortFormer (`sortformer-local`). Attribution required under the NVIDIA Open Model License.
 
 ### NeMo (NVIDIA) diarization models
 - **License:** Apache-2.0 (toolkit); individual model weights may vary

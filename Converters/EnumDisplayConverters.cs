@@ -86,6 +86,7 @@ public sealed class DiarizationProviderDisplayConverter : IValueConverter
         {
             ProviderNames.NemoLocal => "NeMo",
             ProviderNames.WeSpeakerLocal => "WeSpeaker",
+            ProviderNames.SortFormerLocal => "SortFormer",
             _ => providerId,
         };
     }

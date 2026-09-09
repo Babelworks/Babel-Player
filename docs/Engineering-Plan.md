@@ -26,7 +26,7 @@ The codebase is no longer in the state described by the older April 2026 "remain
 - Public compute profiles are `CPU`, `GPU`, and `Cloud`.
 - The default GPU path is the managed local GPU host.
 - Docker remains an advanced optional GPU backend.
-- Local CPU paths remain available for Faster Whisper, CTranslate2, Piper, and WeSpeaker.
+- Local CPU paths remain available for Faster Whisper, CTranslate2, Piper, WeSpeaker, and SortFormer.
 - Local GPU paths currently cover Faster Whisper, Parakeet, NLLB-200, Qwen3-TTS, and NeMo.
 
 ## Active Provider Surface
@@ -57,7 +57,8 @@ The codebase is no longer in the state described by the older April 2026 "remain
 
 ### Diarization
 
-- WeSpeaker: CPU
+- WeSpeaker: CPU (default when multi-speaker detection is enabled)
+- SortFormer: CPU ONNX (selectable, max 4 speakers)
 - NeMo: GPU
 
 ## Current Structural State

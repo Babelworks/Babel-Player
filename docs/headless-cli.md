@@ -9,7 +9,7 @@ window. Exit codes: 0 success, 1 bad arguments, 2 pipeline failure,
 ```text
 BabelPlayer.exe --dub --media <path> [--lang <code>] [--out <dir>]
   [--tts <provider>] [--voice <id>] [--project-dir <dir>]
-  [--no-diarization] [--no-mp4] [--consent-clone]
+  [--diarization <provider>] [--no-diarization] [--no-mp4] [--consent-clone]
 ```
 
 `--out <dir>` writes captions, dub audio, and the MP4 into that folder.
@@ -26,6 +26,7 @@ Examples:
 BabelPlayer.exe --dub --media clip.mp4 --lang es
 BabelPlayer.exe --dub --media clip.mp4 --no-diarization --no-mp4
 BabelPlayer.exe --dub --media clip.mp4 --tts chatterbox --consent-clone
+BabelPlayer.exe --dub --media clip.mp4 --diarization sortformer-local --no-mp4
 ```
 
 `--tts` and `--voice` override the saved settings for this run only. When the
@@ -33,6 +34,9 @@ effective TTS provider is Chatterbox, `--consent-clone` is mandatory and is
 not persisted. When a TTS override is given and the session already reached
 the Translated stage, TTS re-runs under the requested provider and voice.
 
+`--diarization <provider>` selects a local diarization provider for this run
+(for example `wespeaker-local` or `sortformer-local`). `--no-diarization`
+clears diarization for the run and wins if both flags are passed.
 Every run writes `{stem}-captions.srt`, `{stem}-dub.mp3`, `{stem}-dub.mp4`
 (unless `--no-mp4`), plus a `{stem}-dub.manifest.json` sidecar recording the
 providers, voice, language, segment count, timestamps, and exit code.
@@ -42,7 +46,7 @@ providers, voice, language, segment count, timestamps, and exit code.
 ```text
 BabelPlayer.exe --tui [--media <path>] [--lang <code>] [--tts <provider>]
   [--voice <id>] [--out <dir>] [--project-dir <dir>]
-  [--no-diarization] [--no-mp4] [--consent-clone]
+  [--diarization <provider>] [--no-diarization] [--no-mp4] [--consent-clone]
 ```
 
 Staged setup asks only for what the flags did not answer, prints the effective

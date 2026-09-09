@@ -16,6 +16,7 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
     private readonly SessionWorkflowCoordinator _coordinator;
     private string _autoSpeakerDetectionStatus = "Manual speaker mapping is the default release flow.";
     private bool _detectMultipleSpeakers;
+    private string _lastEnabledDiarizationProvider = ProviderNames.WeSpeakerLocal;
 
     internal EmbeddedPlaybackSpeakerRoutingViewModel(
         EmbeddedPlaybackViewModel parent,
@@ -26,7 +27,17 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
     }
 
     /// <summary>
-    /// When true, speaker separation runs using the on-device WeSpeaker pipeline. Maps to <see cref="ProviderNames.WeSpeakerLocal"/> in settings.
+    /// Local diarization providers shown when multi-speaker detection is enabled (WeSpeaker, SortFormer).
+    /// </summary>
+    public IReadOnlyList<string> AvailableLocalDiarizationProviders { get; } =
+    [
+        ProviderNames.WeSpeakerLocal,
+        ProviderNames.SortFormerLocal,
+    ];
+
+    /// <summary>
+    /// When true, speaker separation runs using the selected local diarization provider.
+    /// Turning on defaults to WeSpeaker unless SortFormer was the last enabled choice.
     /// </summary>
     public bool DetectMultipleSpeakers
     {
@@ -42,7 +53,9 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
             if (_detectMultipleSpeakers == value)
                 return;
 
-            var target = value ? ProviderNames.WeSpeakerLocal : string.Empty;
+            var target = value
+                ? ResolveEnabledDiarizationProvider()
+                : string.Empty;
             if (!string.Equals(target, _coordinator.CurrentSettings.DiarizationProvider, StringComparison.Ordinal))
             {
                 _coordinator.CurrentSettings.DiarizationProvider = target;
@@ -55,8 +68,14 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
             }
 
             SetProperty(ref _detectMultipleSpeakers, value);
+            OnPropertyChanged(nameof(IsDiarizationProviderSelectable));
         }
     }
+
+    /// <summary>
+    /// True when multi-speaker detection is on and the provider combo should be shown.
+    /// </summary>
+    public bool IsDiarizationProviderSelectable => DetectMultipleSpeakers;
 
     /// <summary>
     /// Backing value in session settings (empty = off). Prefer <see cref="DetectMultipleSpeakers"/> in UI.
@@ -71,6 +90,13 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
 
             var normalized = InferenceRuntimeCatalog.NormalizeDiarizationProvider(
                 string.IsNullOrWhiteSpace(value) ? string.Empty : value);
+
+            if (!string.IsNullOrWhiteSpace(normalized) &&
+                (string.Equals(normalized, ProviderNames.WeSpeakerLocal, StringComparison.Ordinal) ||
+                 string.Equals(normalized, ProviderNames.SortFormerLocal, StringComparison.Ordinal)))
+            {
+                _lastEnabledDiarizationProvider = normalized;
+            }
 
             if (string.Equals(normalized, _coordinator.CurrentSettings.DiarizationProvider, StringComparison.Ordinal))
             {
@@ -87,6 +113,7 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
                     _parent.IsSynchronizingPipelineSettings = false;
                 }
 
+                OnPropertyChanged(nameof(IsDiarizationProviderSelectable));
                 return;
             }
 
@@ -109,6 +136,7 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
             }
 
             OnPropertyChanged(nameof(DiarizationProvider));
+            OnPropertyChanged(nameof(IsDiarizationProviderSelectable));
             _parent.RefreshProviderHealthDiagnostics();
             _parent.Pipeline.NotifySessionStateChanged();
         }
@@ -163,9 +191,17 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
             if (!string.Equals(normalized, _coordinator.CurrentSettings.DiarizationProvider, StringComparison.Ordinal))
                 _coordinator.CurrentSettings.DiarizationProvider = normalized;
 
+            if (!string.IsNullOrWhiteSpace(normalized) &&
+                (string.Equals(normalized, ProviderNames.WeSpeakerLocal, StringComparison.Ordinal) ||
+                 string.Equals(normalized, ProviderNames.SortFormerLocal, StringComparison.Ordinal)))
+            {
+                _lastEnabledDiarizationProvider = normalized;
+            }
+
             _detectMultipleSpeakers = !string.IsNullOrWhiteSpace(normalized);
             OnPropertyChanged(nameof(DetectMultipleSpeakers));
             OnPropertyChanged(nameof(DiarizationProvider));
+            OnPropertyChanged(nameof(IsDiarizationProviderSelectable));
             DiarizationMinSpeakers = null;
             DiarizationMaxSpeakers = null;
             RebuildSpeakerIds(_parent.Preview.Segments, _parent.Preview.SelectedSegment?.SpeakerId);
@@ -312,6 +348,17 @@ public sealed partial class EmbeddedPlaybackSpeakerRoutingViewModel : ViewModelB
         var referenceMap = _coordinator.GetSpeakerReferenceAudioPaths();
         SelectedSpeakerAssignedVoice = voiceMap.TryGetValue(speakerId, out var voice) ? voice : string.Empty;
         SelectedSpeakerReferenceAudioPath = referenceMap.TryGetValue(speakerId, out var path) ? path : string.Empty;
+    }
+
+    private string ResolveEnabledDiarizationProvider()
+    {
+        if (string.Equals(_lastEnabledDiarizationProvider, ProviderNames.SortFormerLocal, StringComparison.Ordinal) ||
+            string.Equals(_lastEnabledDiarizationProvider, ProviderNames.WeSpeakerLocal, StringComparison.Ordinal))
+        {
+            return _lastEnabledDiarizationProvider;
+        }
+
+        return ProviderNames.WeSpeakerLocal;
     }
 
     private static int? NormalizeSpeakerCount(decimal? value)

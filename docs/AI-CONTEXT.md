@@ -108,13 +108,14 @@ This matrix is based on the active registries in `Services/Registries/`.
 | Provider ID | Display | Compute |
 |---|---|---|
 | `wespeaker-local` | WeSpeaker | CPU |
+| `sortformer-local` | SortFormer | CPU (ONNX) |
 | `nemo-local` | NeMo | GPU |
 
 Notes:
 
 - XTTS is not part of the active TTS pipeline.
 - Google Cloud TTS has code paths but is not surfaced in the current TTS registry UI list.
-- WeSpeaker is the managed CPU diarization path. The old GPU-hosted WeSpeaker endpoint is retired.
+- WeSpeaker is the default managed CPU diarization path when multi-speaker detection is enabled. SortFormer is a selectable CPU ONNX alternative (max 4 speakers). The old GPU-hosted WeSpeaker endpoint is retired.
 
 ---
 

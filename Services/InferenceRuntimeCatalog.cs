@@ -99,6 +99,7 @@ public static class InferenceRuntimeCatalog
     {
         ProviderNames.NemoLocal or ProviderNames.NemoDiarizationAlias => InferenceRuntime.Containerized,
         ProviderNames.WeSpeakerLocal or ProviderNames.WeSpeakerDiarizationAlias => InferenceRuntime.Local,
+        ProviderNames.SortFormerLocal or ProviderNames.SortFormerDiarizationAlias => InferenceRuntime.Local,
         _ => InferenceRuntime.Local,
     };
 
@@ -235,10 +236,11 @@ public static class InferenceRuntimeCatalog
         {
             ProviderNames.NemoDiarizationAlias => ProviderNames.NemoLocal,
             ProviderNames.WeSpeakerDiarizationAlias => ProviderNames.WeSpeakerLocal,
+            ProviderNames.SortFormerDiarizationAlias => ProviderNames.SortFormerLocal,
             _ => normalized,
         };
 
-        // Product UI only offers WeSpeaker; migrate legacy NeMo selections without dropping the registry entry.
+        // Product UI only offers WeSpeaker/SortFormer; migrate legacy NeMo selections without dropping the registry entry.
         if (string.Equals(normalized, ProviderNames.NemoLocal, StringComparison.Ordinal))
             return ProviderNames.WeSpeakerLocal;
 
@@ -250,16 +252,18 @@ public static class InferenceRuntimeCatalog
     /// <summary>
     /// Normalizes a diarization capability provider identifier to a canonical provider ID.
     /// </summary>
-    /// <param name="providerId">The provider identifier or legacy alias (may be null or empty). Recognized aliases: <see cref="ProviderNames.NemoDiarizationAlias"/> and <see cref="ProviderNames.WeSpeakerDiarizationAlias"/>.</param>
+    /// <param name="providerId">The provider identifier or legacy alias (may be null or empty). Recognized aliases: <see cref="ProviderNames.NemoDiarizationAlias"/>, <see cref="ProviderNames.WeSpeakerDiarizationAlias"/>, and <see cref="ProviderNames.SortFormerDiarizationAlias"/>.</param>
     /// <returns>
     /// The canonical provider ID: `ProviderNames.NemoLocal` for <see cref="ProviderNames.NemoDiarizationAlias"/> or `ProviderNames.NemoLocal`,
     /// `ProviderNames.WeSpeakerLocal` for <see cref="ProviderNames.WeSpeakerDiarizationAlias"/> or `ProviderNames.WeSpeakerLocal`,
+    /// `ProviderNames.SortFormerLocal` for <see cref="ProviderNames.SortFormerDiarizationAlias"/> or `ProviderNames.SortFormerLocal`,
     /// or the original `providerId` if non-null and unrecognized; otherwise an empty string.
     /// </returns>
     public static string NormalizeDiarizationCapabilityProviderId(string? providerId) => providerId switch
     {
         ProviderNames.NemoDiarizationAlias or ProviderNames.NemoLocal => ProviderNames.NemoLocal,
         ProviderNames.WeSpeakerDiarizationAlias or ProviderNames.WeSpeakerLocal => ProviderNames.WeSpeakerLocal,
+        ProviderNames.SortFormerDiarizationAlias or ProviderNames.SortFormerLocal => ProviderNames.SortFormerLocal,
         _ => providerId ?? string.Empty,
     };
 
@@ -383,11 +387,12 @@ public static class InferenceRuntimeCatalog
     /// Determines whether the specified diarization provider identifier is a known canonical provider.
     /// </summary>
     /// <param name="providerId">The provider identifier to check; may be null or whitespace.</param>
-    /// <returns>`true` if the identifier is a recognized diarization provider (`ProviderNames.NemoLocal` or `ProviderNames.WeSpeakerLocal`), `false` otherwise.</returns>
+    /// <returns>`true` if the identifier is a recognized diarization provider (`ProviderNames.NemoLocal`, `ProviderNames.WeSpeakerLocal`, or `ProviderNames.SortFormerLocal`), `false` otherwise.</returns>
     public static bool IsKnownDiarizationProvider(string? providerId) => providerId switch
     {
         ProviderNames.NemoLocal
-            or ProviderNames.WeSpeakerLocal => true,
+            or ProviderNames.WeSpeakerLocal
+            or ProviderNames.SortFormerLocal => true,
         _ => false,
     };
 }

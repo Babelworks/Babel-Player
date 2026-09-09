@@ -54,7 +54,8 @@ public sealed class AppSettings
     public string? TranscriptionLanguageHint { get; set; }
 
     /// <summary>
-    /// When non-empty, enables speaker separation using the on-device WeSpeaker pipeline. Empty string skips diarization (recommended for single-speaker media).
+    /// When non-empty, enables speaker separation using a local diarization provider
+    /// (WeSpeaker or SortFormer). Empty string skips diarization (recommended for single-speaker media).
     /// </summary>
     public string DiarizationProvider { get; set; } = string.Empty;
 
@@ -139,6 +140,12 @@ public sealed class AppSettings
     /// Empty string = use platform default (%LOCALAPPDATA%\BabelPlayer\models\chatterbox-multilingual on Windows).
     /// </summary>
     public string ChatterboxModelDir { get; set; } = "";
+
+    /// <summary>
+    /// Directory where SortFormer ONNX model files are stored.
+    /// Empty string = use platform default (%LOCALAPPDATA%\BabelPlayer\models\sortformer-4spk on Windows).
+    /// </summary>
+    public string SortFormerModelDir { get; set; } = "";
 
     /// <summary>
     /// Explicit user consent for Chatterbox voice cloning. Cloning never runs unless

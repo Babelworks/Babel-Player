@@ -186,6 +186,12 @@
   <data name="Check_DetectSpeakers" xml:space="preserve">
     <value>Detect and label separate speakers</value>
   </data>
+  <data name="Label_DiarizationProvider" xml:space="preserve">
+    <value>Speaker detection engine</value>
+  </data>
+  <data name="Hint_DiarizationProvider" xml:space="preserve">
+    <value>WeSpeaker is the default. SortFormer is an on-device ONNX alternative for multi-speaker labeling.</value>
+  </data>
   <data name="Hint_EnableMultiSpeakerForIds" xml:space="preserve">
     <value>Enable multi-speaker detection above, then transcribe, to assign speaker IDs.</value>
   </data>

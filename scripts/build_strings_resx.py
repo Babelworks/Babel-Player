@@ -71,6 +71,8 @@ STRINGS: Dict[str, str] = {
     "Label_MultiSpeakerAudio": "Multi-speaker audio",
     "Hint_MultiSpeakerAudio": "Turn this on when the recording has more than one distinct speaker so lines can be labeled and dubbed separately. For a single narrator or one speaker, leave it off to avoid extra processing.",
     "Check_DetectSpeakers": "Detect and label separate speakers",
+    "Label_DiarizationProvider": "Speaker detection engine",
+    "Hint_DiarizationProvider": "WeSpeaker is the default. SortFormer is an on-device ONNX alternative for multi-speaker labeling.",
     "Hint_EnableMultiSpeakerForIds": "Enable multi-speaker detection above, then transcribe, to assign speaker IDs.",
     "Hint_SpeakerAssignmentsInWizard": "Speaker assignments are managed in the speaker setup wizard.",
     "Tooltip_OpenSpeakerWizard": "Opens the speaker setup wizard: per-speaker voice and (for Qwen) reference clips. Finish in the wizard saves changes.",

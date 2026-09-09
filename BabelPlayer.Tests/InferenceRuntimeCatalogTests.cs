@@ -335,6 +335,41 @@ public sealed class InferenceRuntimeCatalogTests
     }
 
     [Fact]
+    public void NormalizeDiarizationProvider_SortFormerLocal_PreservesKnownId()
+    {
+        var result = InferenceRuntimeCatalog.NormalizeDiarizationProvider(ProviderNames.SortFormerLocal);
+        Assert.Equal(ProviderNames.SortFormerLocal, result);
+    }
+
+    [Fact]
+    public void NormalizeDiarizationProvider_SortFormerAlias_ReturnsSortFormerLocal()
+    {
+        var result = InferenceRuntimeCatalog.NormalizeDiarizationProvider(ProviderNames.SortFormerDiarizationAlias);
+        Assert.Equal(ProviderNames.SortFormerLocal, result);
+    }
+
+    [Fact]
+    public void NormalizeDiarizationProvider_UnknownId_FallsBackToWeSpeakerLocal()
+    {
+        var result = InferenceRuntimeCatalog.NormalizeDiarizationProvider("not-a-real-diarizer");
+        Assert.Equal(ProviderNames.WeSpeakerLocal, result);
+    }
+
+    [Fact]
+    public void IsKnownDiarizationProvider_SortFormerLocal_ReturnsTrue()
+    {
+        Assert.True(InferenceRuntimeCatalog.IsKnownDiarizationProvider(ProviderNames.SortFormerLocal));
+    }
+
+    [Fact]
+    public void InferDiarizationRuntime_SortFormerLocal_ReturnsLocal()
+    {
+        Assert.Equal(
+            InferenceRuntime.Local,
+            InferenceRuntimeCatalog.InferDiarizationRuntime(ProviderNames.SortFormerLocal));
+    }
+
+    [Fact]
     public void NormalizeDiarizationProvider_Null_ReturnsDefaultProvider()
     {
         var result = InferenceRuntimeCatalog.NormalizeDiarizationProvider(null);
