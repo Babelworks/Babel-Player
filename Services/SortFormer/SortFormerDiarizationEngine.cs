@@ -719,8 +719,8 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 return;
             }
 
-            // Pop by appended embedding frames only. validChunkFrameCount includes the one
-            // right-context frame that is never appended to the FIFO (NeMo chunk_len).
+            // Pop by appended embedding frames only. Do not use the model frame count that
+            // includes right-context frames which are never appended to the FIFO (NeMo chunk_len).
             int popOutFrameCount = Math.Max(
                 StreamingChunkModelFrames,
                 chunkEmbeddingFrameCount - StreamingFifoFrames + previousFifoFrameCount);
