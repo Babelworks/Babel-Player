@@ -453,8 +453,7 @@ internal sealed class ChatterboxTtsEngine : IDisposable
             throw new InvalidOperationException("Chatterbox embeddings must be [batch, sequence, hidden].");
         if (source.Dimensions[0] != 1)
             throw new InvalidOperationException("CFG batch expansion expects a single source batch.");
-        if (batchCount < 1)
-            throw new ArgumentOutOfRangeException(nameof(batchCount));
+        ArgumentOutOfRangeException.ThrowIfLessThan(batchCount, 1);
 
         int sequence = source.Dimensions[1];
         int hidden = source.Dimensions[2];

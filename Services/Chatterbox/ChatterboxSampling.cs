@@ -84,7 +84,7 @@ internal static class ChatterboxSampling
             throw new ArgumentException("Conditional and unconditional logits must have the same vocabulary size.", nameof(uncondLogits));
 
         for (int index = 0; index < condLogits.Length; index++)
-            destination[index] = condLogits[index] + cfgWeight * (condLogits[index] - uncondLogits[index]);
+            destination[index] = condLogits[index] + (cfgWeight * (condLogits[index] - uncondLogits[index]));
     }
 
     internal static void ApplyRepetitionPenalty(

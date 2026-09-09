@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -84,8 +85,21 @@ internal static class ProjectFolder
         if (string.IsNullOrWhiteSpace(name))
             return string.Empty;
 
-        var invalid = Path.GetInvalidFileNameChars();
-        var trimmed = string.Concat(name.Where(ch => !invalid.Contains(ch))).Trim();
+        var trimmed = string.Concat(name.Where(ch => !InvalidFileNameCharacters.Contains(ch))).Trim();
         return trimmed.TrimEnd('.', ' ');
+    }
+
+    // Path.GetInvalidFileNameChars() is OS-specific. Linux omits ':' and '?', which
+    // still break project folders copied to Windows or shared across machines.
+    private static readonly HashSet<char> InvalidFileNameCharacters = CreateInvalidFileNameCharacters();
+
+    private static HashSet<char> CreateInvalidFileNameCharacters()
+    {
+        var chars = new HashSet<char>(Path.GetInvalidFileNameChars());
+        foreach (var ch in "<>:\"/\\|?*")
+            chars.Add(ch);
+        for (int i = 0; i < 32; i++)
+            chars.Add((char)i);
+        return chars;
     }
 }
