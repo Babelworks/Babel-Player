@@ -74,7 +74,7 @@ public static class DubTui
                     return value.GetString()!.Trim().ToLowerInvariant();
             }
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             // Fall through to the compiled default below.
         }
