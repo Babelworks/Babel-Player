@@ -41,52 +41,9 @@ public static class DubCli
         string[] args,
         CancellationToken cancellationToken = default)
     {
-        if (args.Any(a => string.Equals(a, "--help", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(a, "-h", StringComparison.OrdinalIgnoreCase)))
-        {
-            PrintUsage();
-            return ExitSuccess;
-        }
-
-        string? media = BenchmarkCli.GetArg(args, "--media");
-        string? lang = BenchmarkCli.GetArg(args, "--lang");
-        string? outDir = BenchmarkCli.GetArg(args, "--out");
-        string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
-        string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
-        string? diarizationOverride = BenchmarkCli.GetArg(args, "--diarization");
-        string? projectDir = BenchmarkCli.GetArg(args, "--project-dir");
-        bool noDiarization = HasFlag(args, "--no-diarization");
-        bool noMp4 = HasFlag(args, "--no-mp4");
-        bool consentClone = HasFlag(args, "--consent-clone");
-        bool keepRenders = HasFlag(args, "--keep-renders");
-
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--diarization", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
-        var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
-        if (unknown.Length > 0)
-        {
-            Console.Error.WriteLine($"[dub] Unknown flag(s): {string.Join(", ", unknown)}");
-            PrintUsage();
-            return ExitArgumentError;
-        }
-
-        if (media is null)
-        {
-            Console.Error.WriteLine("[dub] --media <path> is required.");
-            PrintUsage();
-            return ExitArgumentError;
-        }
-
-        if (!File.Exists(media))
-        {
-            Console.Error.WriteLine($"[dub] Media file not found: {media}");
-            return ExitArgumentError;
-        }
-
-        if (projectDir is not null && !IsValidProjectDir(projectDir))
-        {
-            Console.Error.WriteLine($"[dub] Invalid project directory: {projectDir}");
-            return ExitArgumentError;
-        }
+        var parse = ParseArguments(args);
+        if (parse.Options is null)
+            return parse.ExitCode;
 
         var options = parse.Options;
         var media = options.Media;
@@ -117,30 +74,15 @@ public static class DubCli
                 Path.Combine(appDataRoot, "settings", "app-settings.json"), log);
             var settings = settingsService.LoadOrDefault();
 
-            if (!string.IsNullOrWhiteSpace(lang))
-                settings.TargetLanguage = lang.Trim().ToLowerInvariant();
-            if (noDiarization)
-                settings.DiarizationProvider = string.Empty;
-            else if (!string.IsNullOrWhiteSpace(diarizationOverride))
-                settings.DiarizationProvider = InferenceRuntimeCatalog.NormalizeDiarizationProvider(diarizationOverride);
-            if (!string.IsNullOrWhiteSpace(ttsOverride))
-            {
-                settings.TtsProvider = ttsOverride.Trim().ToLowerInvariant();
-                settings.TtsProfile = InferenceRuntimeCatalog.InferTtsProfile(settings.TtsProvider);
-            }
-            if (!string.IsNullOrWhiteSpace(voiceOverride))
-                settings.TtsVoice = voiceOverride.Trim();
+            var projectDir = ResolveProjectDirectory(media, options.ProjectDir, settings);
+            string outputDir = string.IsNullOrWhiteSpace(options.OutDir)
+                ? projectDir ?? Path.GetDirectoryName(media) ?? Environment.CurrentDirectory
+                : Path.GetFullPath(options.OutDir);
 
-            if (consentClone)
-                settings.ChatterboxVoiceCloneConsent = true;
-            if (keepRenders)
-                settings.KeepRenderArtifacts = true;
-
-            Console.WriteLine($"[dub] transcription : {settings.TranscriptionProvider} ({settings.TranscriptionModel})");
-            Console.WriteLine($"[dub] translation  : {settings.TranslationProvider} -> {settings.TargetLanguage}");
-            Console.WriteLine($"[dub] tts          : {settings.TtsProvider}");
-            Console.WriteLine($"[dub] diarization  : {(string.IsNullOrEmpty(settings.DiarizationProvider) ? "off" : settings.DiarizationProvider)}");
-            Console.WriteLine();
+            WriteStartupBanner(media, outputDir);
+            Directory.CreateDirectory(outputDir);
+            ApplyCliSettingsOverrides(settings, options);
+            WriteProviderSummary(settings);
 
             var sessionsRoot = ResolveSessionsRoot(appDataRoot, projectDir);
             Console.WriteLine($"[dub] sessions    : {sessionsRoot}");
@@ -268,6 +210,7 @@ public static class DubCli
         string? TtsOverride,
         string? VoiceOverride,
         string? ProjectDir,
+        string? DiarizationOverride,
         bool NoDiarization,
         bool NoMp4,
         bool ConsentClone,
@@ -287,13 +230,14 @@ public static class DubCli
         string? outDir = BenchmarkCli.GetArg(args, "--out");
         string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
         string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
+        string? diarizationOverride = BenchmarkCli.GetArg(args, "--diarization");
         string? projectDir = BenchmarkCli.GetArg(args, "--project-dir");
         bool noDiarization = HasFlag(args, "--no-diarization");
         bool noMp4 = HasFlag(args, "--no-mp4");
         bool consentClone = HasFlag(args, "--consent-clone");
         bool keepRenders = HasFlag(args, "--keep-renders");
 
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
+        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--diarization", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -328,6 +272,7 @@ public static class DubCli
             ttsOverride,
             voiceOverride,
             projectDir,
+            diarizationOverride,
             noDiarization,
             noMp4,
             consentClone,
@@ -353,6 +298,8 @@ public static class DubCli
             settings.TargetLanguage = options.Lang.Trim().ToLowerInvariant();
         if (options.NoDiarization)
             settings.DiarizationProvider = string.Empty;
+        else if (!string.IsNullOrWhiteSpace(options.DiarizationOverride))
+            settings.DiarizationProvider = InferenceRuntimeCatalog.NormalizeDiarizationProvider(options.DiarizationOverride);
         if (!string.IsNullOrWhiteSpace(options.TtsOverride))
         {
             settings.TtsProvider = options.TtsOverride.Trim().ToLowerInvariant();
