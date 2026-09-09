@@ -43,6 +43,9 @@ public sealed class ProjectFolderTests : IDisposable
         var sanitized = ProjectFolder.SanitizeDirectoryName("clip:take?");
         Assert.Equal("cliptake", sanitized);
         Assert.Equal("cliptake", ProjectFolder.SanitizeDirectoryName("clip<>take|?*"));
+        Assert.Equal("_CON.mp4", ProjectFolder.SanitizeDirectoryName("CON.mp4"));
+        Assert.Equal("_nul", ProjectFolder.SanitizeDirectoryName("nul"));
+        Assert.Equal("clip.mp4", ProjectFolder.SanitizeDirectoryName("clip.mp4"));
     }
 
     [Fact]

@@ -102,7 +102,20 @@ internal static class ProjectFolder
             return string.Empty;
 
         var trimmed = string.Concat(name.Where(ch => !InvalidFileNameCharacters.Contains(ch))).Trim();
-        return trimmed.TrimEnd('.', ' ');
+        trimmed = trimmed.TrimEnd('.', ' ');
+        if (IsWindowsReservedDeviceName(trimmed))
+            trimmed = "_" + trimmed;
+        return trimmed;
+    }
+
+    private static bool IsWindowsReservedDeviceName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+
+        var dot = name.IndexOf('.');
+        var stem = dot >= 0 ? name[..dot] : name;
+        return WindowsReservedDeviceNames.Contains(stem);
     }
 
     // Path.GetInvalidFileNameChars() is OS-specific. Linux omits ':' and '?', which
@@ -118,4 +131,11 @@ internal static class ProjectFolder
             chars.Add((char)i);
         return chars;
     }
+
+    private static readonly HashSet<string> WindowsReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
 }

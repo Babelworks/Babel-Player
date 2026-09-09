@@ -1002,7 +1002,11 @@ public partial class MainWindow : Window
             return null;
 
         var projectDir = ProjectFolder.TryGetDefaultDirectory(vm.Coordinator.CurrentSession.SourceMediaPath);
-        if (projectDir is null || !ProjectFolder.TryEnsureWritable(projectDir))
+        if (projectDir is null)
+            return null;
+
+        var writable = await Task.Run(() => ProjectFolder.TryEnsureWritable(projectDir)).ConfigureAwait(true);
+        if (!writable)
             return null;
 
         return await StorageProvider.TryGetFolderFromPathAsync(projectDir).ConfigureAwait(true);

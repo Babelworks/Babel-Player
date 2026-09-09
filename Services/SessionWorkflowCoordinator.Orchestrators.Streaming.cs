@@ -713,7 +713,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                     progressFactory: null,
                     isIndeterminate: true,
                     cancellationToken,
-                    _ => "First Chatterbox load on CPU can take several minutes.").ConfigureAwait(false);
+                    elapsed => elapsed.TotalSeconds >= 20 ? "Still generating." : null).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

@@ -231,6 +231,7 @@ print('Transcription complete')
         var inputPath = request.SourceAudioPath;
         string? extractedAudioPath = null;
         var extension = Path.GetExtension(request.SourceAudioPath).ToLowerInvariant();
+        Exception? completionError = null;
 
         try
         {
@@ -413,9 +414,14 @@ _emit({{
                 PeakVramMb: peakVramMb,
                 PeakRamMb: peakRamMb);
         }
+        catch (Exception ex)
+        {
+            completionError = ex;
+            throw;
+        }
         finally
         {
-            writer.TryComplete();
+            writer.TryComplete(completionError);
             if (!string.IsNullOrWhiteSpace(extractedAudioPath) && File.Exists(extractedAudioPath))
             {
                 File.Delete(extractedAudioPath);
