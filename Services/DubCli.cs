@@ -93,6 +93,7 @@ public static class DubCli
         var logPath = Path.Combine(appDataRoot, "logs", "dub.log");
         var log = new AppLog(logPath);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var startedUtc = DateTimeOffset.UtcNow;
 
         Console.WriteLine();
         Console.WriteLine("┌──────────────────────────────────────┐");
@@ -171,6 +172,8 @@ public static class DubCli
             Console.WriteLine("[dub] loading media…");
             coordinator.LoadMedia(media);
             Console.WriteLine($"[dub] session {coordinator.CurrentSession.SessionId} at stage {coordinator.CurrentSession.Stage}");
+            var timings = new DubRunTimings();
+            timings.Mark("load-media", stopwatch.Elapsed);
 
             if ((!string.IsNullOrWhiteSpace(ttsOverride) || !string.IsNullOrWhiteSpace(voiceOverride)) &&
                 coordinator.CurrentSession.Stage >= SessionWorkflowStage.Translated)
@@ -180,6 +183,7 @@ public static class DubCli
             }
 
             await RunPipelineAsync(coordinator, cts.Token).ConfigureAwait(false);
+            timings.Mark("pipeline", stopwatch.Elapsed);
 
             var stem = Path.GetFileNameWithoutExtension(media);
             var segments = await coordinator.GetSegmentWorkflowListAsync().ConfigureAwait(false);
@@ -187,6 +191,7 @@ public static class DubCli
             var srtPath = Path.Combine(outputDir, $"{stem}-captions.srt");
             File.WriteAllText(srtPath, SrtGenerator.Generate(segments));
             Console.WriteLine($"[dub] wrote {srtPath}");
+            timings.Mark("captions", stopwatch.Elapsed);
 
             var render = await coordinator.TryRenderDubAudioForExportAsync(cts.Token).ConfigureAwait(false);
             if (render is null)
@@ -203,6 +208,7 @@ public static class DubCli
                 return ExitPipelineFailure;
             }
             Console.WriteLine($"[dub] wrote {mp3Path}");
+            timings.Mark("dub-audio", stopwatch.Elapsed);
 
             var exitCode = ExitSuccess;
 
@@ -238,6 +244,9 @@ public static class DubCli
             TryDeleteQuiet(render.DubTimelinePath);
             if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
                 TryDeleteQuiet(render.MixedWithAmbiancePath);
+            timings.Mark("video-export", stopwatch.Elapsed);
+
+            WriteRunTimings(outputDir, stem, timings, startedUtc);
 
             if (exitCode != ExitSuccess)
                 return exitCode;
@@ -273,6 +282,22 @@ public static class DubCli
             catch
             {
             }
+        }
+    }
+
+    private static void WriteRunTimings(
+        string outputDir,
+        string stem,
+        DubRunTimings timings,
+        DateTimeOffset startedUtc)
+    {
+        try
+        {
+            Console.WriteLine($"[dub] wrote {timings.Write(outputDir, stem, startedUtc)}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[dub] Could not write run timings: {ex.Message}");
         }
     }
 
