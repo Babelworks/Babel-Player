@@ -58,6 +58,7 @@ internal static class ChatterboxAudio
             samples = padded;
         }
 
+        // Single truncation point. Callers must not truncate again.
         return TruncateReferenceAudio(samples, targetSampleRate);
     }
 

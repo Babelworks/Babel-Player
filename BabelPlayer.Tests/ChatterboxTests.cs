@@ -270,6 +270,27 @@ public sealed class ChatterboxTests : IDisposable
     }
 
     [Fact]
+    public void TruncateReferenceAudio_IsIdempotentWhenAlreadyShort()
+    {
+        var samples = new float[24000 * 3];
+        var truncated = ChatterboxAudio.TruncateReferenceAudio(samples, 24000);
+        Assert.Same(samples, truncated);
+    }
+
+    [Fact]
+    public void SelectDecoderSpeechTokens_MatchesOfficialOnnxSlice()
+    {
+        const long start = 6561;
+        const long stop = 6562;
+
+        Assert.Equal(new long[] { 10, 20 }, ChatterboxTtsEngine.SelectDecoderSpeechTokens([start, 10, 20, stop]));
+        Assert.Equal(new long[] { 10 }, ChatterboxTtsEngine.SelectDecoderSpeechTokens([start, 10, stop]));
+        Assert.Equal(new long[] { 10, 20 }, ChatterboxTtsEngine.SelectDecoderSpeechTokens([start, 10, 20, 30]));
+        Assert.Empty(ChatterboxTtsEngine.SelectDecoderSpeechTokens([start]));
+        Assert.Empty(ChatterboxTtsEngine.SelectDecoderSpeechTokens([]));
+    }
+
+    [Fact]
     public void CountTrailingRepeats_CountsRunAtEnd()
     {
         Assert.Equal(3, ChatterboxSampling.CountTrailingRepeats([1, 2, 9, 9, 9]));

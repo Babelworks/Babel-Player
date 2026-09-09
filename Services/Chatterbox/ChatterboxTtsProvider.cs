@@ -73,27 +73,37 @@ public sealed class ChatterboxTtsProvider : ITtsProvider, IDisposable, IAsyncDis
                 "Chatterbox voice cloning requires explicit consent. Grant it in Settings (Chatterbox voice cloning) or pass --consent-clone for headless runs.");
         }
 
+        string? extractedReferencePath = null;
         if (string.IsNullOrWhiteSpace(request.ReferenceAudioPath) || !File.Exists(request.ReferenceAudioPath))
         {
-            var resolved = await EnsureSourceLanguageReferenceAsync(request, cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(resolved))
+            extractedReferencePath = await EnsureSourceLanguageReferenceAsync(request, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(extractedReferencePath))
             {
                 throw new InvalidOperationException(
                     "Chatterbox voice cloning requires source audio to clone from. Load media first, or assign a speaker clip in the Speaker Reference Wizard.");
             }
 
-            request = request with { ReferenceAudioPath = resolved };
+            request = request with { ReferenceAudioPath = extractedReferencePath };
         }
 
         _log.Info($"Starting Chatterbox segment TTS ({request.SpeakerId ?? "clone"}): {request.Text[..Math.Min(30, request.Text.Length)]}... -> {request.OutputAudioPath}");
 
-        var engine = GetOrCreateEngine();
-        var wavBytes = await engine.SynthesizeAsync(
-            request.Text,
-            request.Language ?? "en",
-            request.ReferenceAudioPath,
-            targetDurationSeconds: request.TargetDurationSeconds,
-            cancellationToken).ConfigureAwait(false);
+        byte[] wavBytes;
+        try
+        {
+            var engine = GetOrCreateEngine();
+            wavBytes = await engine.SynthesizeAsync(
+                request.Text,
+                request.Language ?? "en",
+                request.ReferenceAudioPath,
+                targetDurationSeconds: request.TargetDurationSeconds,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (extractedReferencePath is not null)
+                await _extractor.DeleteAsync(extractedReferencePath).ConfigureAwait(false);
+        }
 
         var outputDir = Path.GetDirectoryName(request.OutputAudioPath);
         if (!string.IsNullOrWhiteSpace(outputDir))

@@ -68,7 +68,7 @@ internal sealed class ChatterboxTtsEngine : IDisposable
             var inputIds = BuildTextInputIds(conditionedText, sessions.Tokenizer, modelFiles.IsTurbo);
             var generation = GenerateSpeechTokens(
                 inputIds,
-                ChatterboxAudio.TruncateReferenceAudio(referenceAudio, SampleRate),
+                referenceAudio,
                 sessions.SpeechEncoder,
                 sessions.EmbedTokens,
                 sessions.LanguageModel,
@@ -323,12 +323,7 @@ internal sealed class ChatterboxTtsEngine : IDisposable
         InferenceSession decoderSession,
         bool isTurbo)
     {
-        long[] speechTokens = generation.GeneratedTokens
-            .Skip(1)
-            .TakeWhile(static token => token != StopSpeechToken)
-            .ToArray();
-        if (speechTokens.Length > 1)
-            speechTokens = speechTokens[..^1];
+        long[] speechTokens = SelectDecoderSpeechTokens(generation.GeneratedTokens);
         if (isTurbo)
             speechTokens = speechTokens.Concat(Enumerable.Repeat(SilenceToken, 3)).ToArray();
 
@@ -350,6 +345,26 @@ internal sealed class ChatterboxTtsEngine : IDisposable
 
         using var results = decoderSession.Run(inputs.Values);
         return ReadFloatTensor(results.Single()).Values;
+    }
+
+    /// <summary>
+    /// Maps generated LM tokens onto decoder speech tokens.
+    /// Official multilingual ONNX uses <c>generate_tokens[:, 1:-1]</c>: drop the leading
+    /// START_SPEECH token and the trailing token (STOP when the model ended cleanly,
+    /// otherwise an incomplete frame). Filtering STOP first and then dropping another
+    /// token would clip a real speech frame on EOS.
+    /// </summary>
+    internal static long[] SelectDecoderSpeechTokens(IReadOnlyList<long> generatedTokens)
+    {
+        if (generatedTokens.Count <= 1)
+            return [];
+
+        var inner = generatedTokens.Skip(1).ToArray();
+        if (inner.Length == 0)
+            return [];
+
+        inner = inner[..^1];
+        return inner.TakeWhile(static token => token != StopSpeechToken).ToArray();
     }
 
     internal static string ApplyMultilingualLanguagePrefix(

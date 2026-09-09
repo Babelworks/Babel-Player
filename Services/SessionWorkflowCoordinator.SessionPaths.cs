@@ -50,17 +50,16 @@ public sealed partial class SessionWorkflowCoordinator
 
     private string ResolveSessionDirectory(Guid sessionId, string? sourceMediaPath)
     {
-        var appLocalDir = _sessionSwitchService.GetSessionDirectory(sessionId);
-        if (!CurrentSettings.StoreProjectsNextToMedia)
-            return appLocalDir;
-
         var resolved = ProjectFolder.ResolveSessionDirectory(
             _perSessionStore.SessionsRoot,
             sessionId,
             sourceMediaPath,
-            useProjectFolders: true);
+            useProjectFolders: CurrentSettings.StoreProjectsNextToMedia,
+            projectDirectoryOverride: _projectDirectoryOverride);
 
-        if (ProjectFolder.TryGetDefaultDirectory(sourceMediaPath) is { } projectDir)
+        if (_projectDirectoryOverride is null &&
+            CurrentSettings.StoreProjectsNextToMedia &&
+            ProjectFolder.TryGetDefaultDirectory(sourceMediaPath) is { } projectDir)
         {
             var intended = Path.Combine(projectDir, ProjectFolder.SessionsFolderName, sessionId.ToString());
             if (!string.Equals(resolved, intended, StringComparison.OrdinalIgnoreCase))
@@ -71,5 +70,20 @@ public sealed partial class SessionWorkflowCoordinator
         }
 
         return resolved;
+    }
+
+    private static string? NormalizeProjectDirectory(string? projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(projectDirectory))
+            return null;
+
+        try
+        {
+            return Path.GetFullPath(projectDirectory.Trim());
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
     }
 }

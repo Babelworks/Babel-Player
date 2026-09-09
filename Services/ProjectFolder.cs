@@ -42,22 +42,38 @@ internal static class ProjectFolder
         string appLocalSessionsRoot,
         Guid sessionId,
         string? sourceMediaPath,
-        bool useProjectFolders)
+        bool useProjectFolders,
+        string? projectDirectoryOverride = null)
     {
         var appLocalDir = Path.Combine(appLocalSessionsRoot, sessionId.ToString());
-        if (!useProjectFolders)
-            return appLocalDir;
-
-        var projectDir = TryGetDefaultDirectory(sourceMediaPath);
+        var projectDir = ResolveProjectDirectory(sourceMediaPath, useProjectFolders, projectDirectoryOverride);
         if (projectDir is null)
             return appLocalDir;
 
         if (!TryEnsureWritableSessionsRoot(projectDir))
             return appLocalDir;
 
-        var projectSessionsRoot = Path.Combine(projectDir, SessionsFolderName);
+        return Path.Combine(projectDir, SessionsFolderName, sessionId.ToString());
+    }
 
-        return Path.Combine(projectSessionsRoot, sessionId.ToString());
+    private static string? ResolveProjectDirectory(
+        string? sourceMediaPath,
+        bool useProjectFolders,
+        string? projectDirectoryOverride)
+    {
+        if (!string.IsNullOrWhiteSpace(projectDirectoryOverride))
+        {
+            try
+            {
+                return Path.GetFullPath(projectDirectoryOverride);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return null;
+            }
+        }
+
+        return useProjectFolders ? TryGetDefaultDirectory(sourceMediaPath) : null;
     }
 
     public static bool TryEnsureWritableSessionsRoot(string projectDir) =>

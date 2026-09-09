@@ -82,6 +82,46 @@ public sealed class ProjectFolderTests : IDisposable
     }
 
     [Fact]
+    public void ResolveSessionDirectory_HonorsProjectDirectoryOverrideOverMediaSibling()
+    {
+        var media = Path.Combine(_dir, "clip.mp4");
+        var appLocalRoot = Path.Combine(_dir, "app-sessions");
+        var portable = Path.Combine(_dir, "portable");
+        Directory.CreateDirectory(portable);
+        var sessionId = Guid.NewGuid();
+
+        var resolved = ProjectFolder.ResolveSessionDirectory(
+            appLocalRoot,
+            sessionId,
+            media,
+            useProjectFolders: true,
+            projectDirectoryOverride: portable);
+
+        Assert.Equal(Path.Combine(portable, "sessions", sessionId.ToString()), resolved);
+        Assert.True(Directory.Exists(Path.Combine(portable, "sessions")));
+        Assert.False(Directory.Exists(Path.Combine(_dir, "clip.mp4.babel")));
+    }
+
+    [Fact]
+    public void ResolveSessionDirectory_OverrideWinsWhenProjectFoldersAreDisabled()
+    {
+        var media = Path.Combine(_dir, "clip.mp4");
+        var appLocalRoot = Path.Combine(_dir, "app-sessions");
+        var portable = Path.Combine(_dir, "portable");
+        Directory.CreateDirectory(portable);
+        var sessionId = Guid.NewGuid();
+
+        var resolved = ProjectFolder.ResolveSessionDirectory(
+            appLocalRoot,
+            sessionId,
+            media,
+            useProjectFolders: false,
+            projectDirectoryOverride: portable);
+
+        Assert.Equal(Path.Combine(portable, "sessions", sessionId.ToString()), resolved);
+    }
+
+    [Fact]
     public void NewAppSettings_EnablesProjectFoldersByDefault()
     {
         Assert.True(new Babel.Player.Services.Settings.AppSettings().StoreProjectsNextToMedia);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -14,8 +15,8 @@ namespace Babel.Player.Services;
 public sealed class TtsReferenceExtractor : IAsyncDisposable
 {
     private readonly AppLog _log;
-    private string? _tempWavPath;
-    private bool _disposed;
+    private readonly ConcurrentDictionary<string, byte> _tempWavPaths = new(StringComparer.OrdinalIgnoreCase);
+    private int _disposed;
 
     public const double DefaultDurationSeconds = 10.0d;
     public const double MaxDurationSeconds = 10.0d;
@@ -48,8 +49,7 @@ public sealed class TtsReferenceExtractor : IAsyncDisposable
         if (!File.Exists(videoPath))
             throw new FileNotFoundException("Source video file not found", videoPath);
 
-        // Clean up any previously extracted reference
-        await CleanupAsync();
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var ffmpegPath = ResolveFfmpegPath()
             ?? throw new InvalidOperationException("ffmpeg not found. TTS reference extraction requires ffmpeg.");
@@ -65,103 +65,126 @@ public sealed class TtsReferenceExtractor : IAsyncDisposable
         _log.Debug($"[TtsReferenceExtractor] Window: {clampedStart:0.###}s for {clampedDuration:0.###}s");
         _log.Debug($"[TtsReferenceExtractor] Output path: {tempPath}");
 
-        var psi = new ProcessStartInfo
+        try
         {
-            FileName = ffmpegPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
 
-        // Extract source-language speech (the speaker's actual language), 16kHz mono WAV.
-        psi.ArgumentList.Add("-y");
-        psi.ArgumentList.Add("-i");
-        psi.ArgumentList.Add(videoPath);
-        psi.ArgumentList.Add("-ss");
-        psi.ArgumentList.Add(clampedStart.ToString("0.###", CultureInfo.InvariantCulture));
-        psi.ArgumentList.Add("-t");
-        psi.ArgumentList.Add(clampedDuration.ToString("0.###", CultureInfo.InvariantCulture));
-        psi.ArgumentList.Add("-ar");
-        psi.ArgumentList.Add("16000");
-        psi.ArgumentList.Add("-ac");
-        psi.ArgumentList.Add("1");
-        psi.ArgumentList.Add("-f");
-        psi.ArgumentList.Add("wav");
-        psi.ArgumentList.Add(tempPath);
+            // Extract source-language speech (the speaker's actual language), 16kHz mono WAV.
+            psi.ArgumentList.Add("-y");
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(videoPath);
+            psi.ArgumentList.Add("-ss");
+            psi.ArgumentList.Add(clampedStart.ToString("0.###", CultureInfo.InvariantCulture));
+            psi.ArgumentList.Add("-t");
+            psi.ArgumentList.Add(clampedDuration.ToString("0.###", CultureInfo.InvariantCulture));
+            psi.ArgumentList.Add("-ar");
+            psi.ArgumentList.Add("16000");
+            psi.ArgumentList.Add("-ac");
+            psi.ArgumentList.Add("1");
+            psi.ArgumentList.Add("-f");
+            psi.ArgumentList.Add("wav");
+            psi.ArgumentList.Add(tempPath);
 
-        using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start ffmpeg for TTS reference extraction.");
+            using var process = Process.Start(psi)
+                ?? throw new InvalidOperationException("Failed to start ffmpeg for TTS reference extraction.");
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-        var stderrTask = process.StandardError.ReadToEndAsync(ct);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+            var stderrTask = process.StandardError.ReadToEndAsync(ct);
 
-        await process.WaitForExitAsync(ct);
+            await process.WaitForExitAsync(ct);
 
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
 
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"ffmpeg reference extraction failed with exit code {process.ExitCode}: {stderr} {stdout}".Trim());
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"ffmpeg reference extraction failed with exit code {process.ExitCode}: {stderr} {stdout}".Trim());
+            }
+
+            if (!File.Exists(tempPath))
+            {
+                throw new InvalidOperationException(
+                    $"ffmpeg completed but output file was not created: {tempPath}");
+            }
+
+            _tempWavPaths.TryAdd(tempPath, 0);
+            _log.Debug($"[TtsReferenceExtractor] Reference extraction complete: {tempPath}");
+            return tempPath;
         }
-
-        if (!File.Exists(tempPath))
+        catch
         {
-            throw new InvalidOperationException(
-                $"ffmpeg completed but output file was not created: {tempPath}");
+            TryDeleteFile(tempPath);
+            throw;
         }
-
-        _tempWavPath = tempPath;
-        _log.Debug($"[TtsReferenceExtractor] Reference extraction complete: {tempPath}");
-
-        return tempPath;
     }
 
     /// <summary>
-    /// Deletes the extracted reference WAV file if one exists.
+    /// Deletes every extracted reference WAV this instance still tracks.
     /// </summary>
-    public Task DeleteAsync()
-    {
-        return CleanupAsync();
-    }
+    public Task DeleteAsync() => CleanupAllAsync();
 
     /// <summary>
-    /// Resets the extractor state and deletes any temp file.
+    /// Deletes one extracted reference WAV after the caller has finished reading it.
+    /// Untracked paths are left untouched so concurrent extracts cannot delete each other's files.
+    /// </summary>
+    public Task DeleteAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return Task.CompletedTask;
+
+        if (_tempWavPaths.TryRemove(path, out _))
+            TryDeleteFile(path);
+
+        return Task.CompletedTask;
+    }
+
+    internal bool TryTrackTempFile(string path) =>
+        !string.IsNullOrWhiteSpace(path) && _tempWavPaths.TryAdd(path, 0);
+
+    /// <summary>
+    /// Resets the extractor state and deletes any remaining temp files.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
             return;
 
-        await CleanupAsync();
-        _disposed = true;
+        await CleanupAllAsync().ConfigureAwait(false);
     }
 
-    private Task CleanupAsync()
+    private Task CleanupAllAsync()
     {
-        if (string.IsNullOrWhiteSpace(_tempWavPath))
-            return Task.CompletedTask;
+        foreach (var path in _tempWavPaths.Keys)
+        {
+            if (_tempWavPaths.TryRemove(path, out _))
+                TryDeleteFile(path);
+        }
 
+        return Task.CompletedTask;
+    }
+
+    private void TryDeleteFile(string path)
+    {
         try
         {
-            if (File.Exists(_tempWavPath))
+            if (File.Exists(path))
             {
-                File.Delete(_tempWavPath);
-                _log.Debug($"[TtsReferenceExtractor] Cleaned up temp file: {_tempWavPath}");
+                File.Delete(path);
+                _log.Debug($"[TtsReferenceExtractor] Cleaned up temp file: {path}");
             }
         }
         catch (Exception ex)
         {
             _log.Error($"[TtsReferenceExtractor] Failed to clean up temp file: {ex.Message}", ex);
         }
-        finally
-        {
-            _tempWavPath = null;
-        }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -27,6 +27,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
     private readonly RecentSessionsStore _recentStore;
     private readonly SessionArtifactReader _artifactReader;
     private readonly SessionSwitchService _sessionSwitchService;
+    private readonly string? _projectDirectoryOverride;
     private readonly ContainerizedServiceProbe? _containerizedProbe;
     private readonly IContainerizedInferenceManager? _containerizedInferenceManager;
     private readonly ManagedCpuRuntimeManager _cpuRuntimeManager;
@@ -171,6 +172,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
         _artifactReader = options.ArtifactReader ?? new SessionArtifactReader();
         _sessionSwitchService = options.SessionSwitchService
             ?? new SessionSwitchService(registries.PerSessionStore, registries.RecentStore, _log);
+        _projectDirectoryOverride = NormalizeProjectDirectory(options.ProjectDirectory);
 
         _cpuRuntimeManager = new ManagedCpuRuntimeManager(_log);
         TranscriptionRegistry = registries.TranscriptionRegistry;
