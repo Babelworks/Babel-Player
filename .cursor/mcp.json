@@ -1,13 +1,7 @@
 {
   "mcpServers": {
-    "github-mcp-server": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "tools": [
-        "*"
-      ],
-      "id": "b54661543bcc4c889c1eb04eda150259",
-      "headers": {}
-    }
+    "avalonia-docs": {
+      "url": "https://docs-mcp.avaloniaui.net/mcp"
   }
+}
 }
