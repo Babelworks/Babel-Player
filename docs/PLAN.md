@@ -26,6 +26,8 @@ The main remaining work is hardening, progress UX, and continued architecture cl
   Maintained engineering status and current implementation summary.
 - [Next-Priorities-2026-04-16.md](Next-Priorities-2026-04-16.md)
   Short active follow-up list.
+- [sortformer-diarization-plan.md](sortformer-diarization-plan.md)
+  Active plan for the SortFormer CPU ONNX diarization port (`sortformer-local`).
 - [history/smoke/](history/smoke/)
   Timeline evidence and milestone verification notes.
 - [history/benchmarks/](history/benchmarks/)

@@ -52,13 +52,14 @@ public static class DubCli
         string? outDir = BenchmarkCli.GetArg(args, "--out");
         string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
         string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
+        string? diarizationOverride = BenchmarkCli.GetArg(args, "--diarization");
         string? projectDir = BenchmarkCli.GetArg(args, "--project-dir");
         bool noDiarization = HasFlag(args, "--no-diarization");
         bool noMp4 = HasFlag(args, "--no-mp4");
         bool consentClone = HasFlag(args, "--consent-clone");
         bool keepRenders = HasFlag(args, "--keep-renders");
 
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
+        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--diarization", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -132,6 +133,8 @@ public static class DubCli
                 settings.TargetLanguage = lang.Trim().ToLowerInvariant();
             if (noDiarization)
                 settings.DiarizationProvider = string.Empty;
+            else if (!string.IsNullOrWhiteSpace(diarizationOverride))
+                settings.DiarizationProvider = InferenceRuntimeCatalog.NormalizeDiarizationProvider(diarizationOverride);
             if (!string.IsNullOrWhiteSpace(ttsOverride))
             {
                 settings.TtsProvider = ttsOverride.Trim().ToLowerInvariant();
@@ -481,6 +484,7 @@ public static class DubCli
         Console.WriteLine("  --tts <provider>        TTS provider override (e.g. chatterbox)");
         Console.WriteLine("  --voice <id>            TTS voice/model override (default: settings)");
         Console.WriteLine("  --no-diarization        Skip diarization for this run");
+        Console.WriteLine("  --diarization <id>      Diarization provider (wespeaker-local, sortformer-local)");
         Console.WriteLine("  --no-mp4                Skip MP4 export (SRT + MP3 only)");
         Console.WriteLine("  --consent-clone         Grant voice-cloning consent for this run");
         Console.WriteLine("  --project-dir <dir>     Portable session storage (default: app-local)");
@@ -490,6 +494,7 @@ public static class DubCli
         Console.WriteLine("Examples:");
         Console.WriteLine("  BabelPlayer.exe --dub --media clip.mp4 --lang es");
         Console.WriteLine("  BabelPlayer.exe --dub --media clip.mp4 --no-diarization --no-mp4");
+        Console.WriteLine("  BabelPlayer.exe --dub --media clip.mp4 --diarization sortformer-local --no-mp4");
         Console.WriteLine("  BabelPlayer.exe --dub --media clip.mp4 --tts chatterbox --consent-clone");
         Console.WriteLine();
     }

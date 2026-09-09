@@ -99,6 +99,7 @@ public static class InferenceRuntimeCatalog
     {
         ProviderNames.NemoLocal or ProviderNames.NemoDiarizationAlias => InferenceRuntime.Containerized,
         ProviderNames.WeSpeakerLocal or ProviderNames.WeSpeakerDiarizationAlias => InferenceRuntime.Local,
+        ProviderNames.SortFormerLocal or ProviderNames.SortFormerDiarizationAlias => InferenceRuntime.Local,
         _ => InferenceRuntime.Local,
     };
 
@@ -235,10 +236,11 @@ public static class InferenceRuntimeCatalog
         {
             ProviderNames.NemoDiarizationAlias => ProviderNames.NemoLocal,
             ProviderNames.WeSpeakerDiarizationAlias => ProviderNames.WeSpeakerLocal,
+            ProviderNames.SortFormerDiarizationAlias => ProviderNames.SortFormerLocal,
             _ => normalized,
         };
 
-        // Product UI only offers WeSpeaker; migrate legacy NeMo selections without dropping the registry entry.
+        // Product UI only offers WeSpeaker/SortFormer; migrate legacy NeMo selections without dropping the registry entry.
         if (string.Equals(normalized, ProviderNames.NemoLocal, StringComparison.Ordinal))
             return ProviderNames.WeSpeakerLocal;
 
@@ -260,6 +262,7 @@ public static class InferenceRuntimeCatalog
     {
         ProviderNames.NemoDiarizationAlias or ProviderNames.NemoLocal => ProviderNames.NemoLocal,
         ProviderNames.WeSpeakerDiarizationAlias or ProviderNames.WeSpeakerLocal => ProviderNames.WeSpeakerLocal,
+        ProviderNames.SortFormerDiarizationAlias or ProviderNames.SortFormerLocal => ProviderNames.SortFormerLocal,
         _ => providerId ?? string.Empty,
     };
 
@@ -387,7 +390,8 @@ public static class InferenceRuntimeCatalog
     public static bool IsKnownDiarizationProvider(string? providerId) => providerId switch
     {
         ProviderNames.NemoLocal
-            or ProviderNames.WeSpeakerLocal => true,
+            or ProviderNames.WeSpeakerLocal
+            or ProviderNames.SortFormerLocal => true,
         _ => false,
     };
 }

@@ -83,7 +83,8 @@ Babel Player is not a subtitle editor with AI bolted on. The core workflow is:
 
 | Provider | Compute | Notes |
 |---|---|---|
-| WeSpeaker | CPU | Managed CPU runtime |
+| WeSpeaker | CPU | Managed CPU runtime (default when multi-speaker is on) |
+| SortFormer | CPU | Local ONNX (`sortformer-local`, max 4 speakers) |
 | NeMo | GPU | Managed local GPU host |
 
 ## Language Support and Localization
@@ -111,7 +112,7 @@ Babel Player is not a subtitle editor with AI bolted on. The core workflow is:
 | OS | Windows 10 or 11 |
 | Architectures | `x64` and `ARM64` |
 | GPU features | NVIDIA CUDA-capable GPU for local GPU transcription, translation, Qwen TTS, and NeMo diarization |
-| CPU-only path | Supported for Faster Whisper, CTranslate2, Piper, and WeSpeaker |
+| CPU-only path | Supported for Faster Whisper, CTranslate2, Piper, WeSpeaker, and SortFormer |
 
 ## Installation
 

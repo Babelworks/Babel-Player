@@ -146,6 +146,19 @@ public sealed partial class SessionWorkflowCoordinator
     private static readonly string[] VideoExtensions = [".mp4", ".avi", ".mkv", ".mov"];
 
     /// <summary>
+    /// True when the diarization input must be rewritten to 16 kHz mono PCM WAV before the provider runs.
+    /// </summary>
+    internal static bool RequiresPcmWavExtractForDiarization(string audioPath, string? diarizationProvider)
+    {
+        var extension = Path.GetExtension(audioPath).ToLowerInvariant();
+        if (Array.Exists(VideoExtensions, ext => ext == extension))
+            return true;
+
+        return string.Equals(diarizationProvider, ProviderNames.SortFormerLocal, StringComparison.Ordinal)
+            && !string.Equals(extension, ".wav", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Runs diarization for the given audio/transcript, merges speaker assignments into transcript (and translation if present), advances and persists session stage, and returns the execution outcome.
     /// </summary>
     /// <remarks>
@@ -181,29 +194,34 @@ public sealed partial class SessionWorkflowCoordinator
         int? effectiveMinSpeakers = null;
         int? effectiveMaxSpeakers = null;
 
-        // Extract audio from video files — diarization providers cannot decode video containers.
+        // Normalize containers SortFormer (and other PCM-WAV consumers) cannot decode.
+        // Video always needs extract; non-WAV audio does too when the active provider is SortFormer.
         var effectiveAudioPath = audioPath;
         string? tempExtractedAudio = null;
-        var extension = Path.GetExtension(audioPath).ToLowerInvariant();
+        var isVideo = Array.Exists(
+            VideoExtensions,
+            ext => string.Equals(ext, Path.GetExtension(audioPath), StringComparison.OrdinalIgnoreCase));
+        var requiresPcmWav = RequiresPcmWavExtractForDiarization(audioPath, CurrentSettings.DiarizationProvider);
 
-        if (Array.Exists(VideoExtensions, ext => ext == extension))
+        if (requiresPcmWav)
         {
             if (_audioProcessingService is null)
                 throw new PipelineProviderException(
-                    "Cannot diarize video files without audio processing support (ffmpeg).");
+                    isVideo
+                        ? "Cannot diarize video files without audio processing support (ffmpeg)."
+                        : "Cannot diarize non-WAV audio with SortFormer without audio processing support (ffmpeg).");
 
             tempExtractedAudio = Path.Combine(Path.GetTempPath(), $"diar_{Guid.NewGuid():N}.wav");
-            _log.Debug($"Extracting audio from video for diarization: {audioPath} → {tempExtractedAudio}");
+            _log.Debug($"Extracting PCM WAV for diarization: {audioPath} → {tempExtractedAudio}");
             await _audioProcessingService.ExtractFullAudioAsync(audioPath, tempExtractedAudio, ct)
                 .ConfigureAwait(false);
             effectiveAudioPath = tempExtractedAudio;
         }
 
+        IDiarizationProvider? provider = null;
         try
         {
             ProviderReadiness readiness;
-            IDiarizationProvider provider;
-
 
             if (usesContainerizedRuntime)
             {
@@ -306,6 +324,18 @@ public sealed partial class SessionWorkflowCoordinator
         finally
         {
             totalStopwatch.Stop();
+            if (provider is IDisposable disposableProvider)
+            {
+                try
+                {
+                    disposableProvider.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _log.Warning($"Failed to dispose diarization provider: {ex.Message}");
+                }
+            }
+
             if (tempExtractedAudio is not null)
             {
                 try

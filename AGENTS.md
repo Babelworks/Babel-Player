@@ -27,7 +27,7 @@
 - NVIDIA RTX Video features (VSR, RTX HDR) are gated on supported GPU hardware, display HDR state where applicable, and the GPU-accelerated video path (for example `VideoUseGpuNext`-style settings), not on a single flag alone.
 - Public project site/docs are served via GitHub Pages at `https://babelworks.github.io/Babel-Player/`.
 - Windows native deps install **ffmpeg.exe** and **ffprobe.exe** under `tools/<rid>/`; the managed GPU host prepends those directories to **PATH** so subprocess audio tooling (for example pydub) can resolve **ffprobe**.
-- Multi-speaker detection in the main UI is **WeSpeaker**-only with diarization off by default; periodic NeMo background health on the GPU host is off unless **`BABEL_ENABLE_NEMO_BACKGROUND_HEALTH`** is enabled.
+- Multi-speaker detection is off by default. Enabling it defaults to **WeSpeaker**; **SortFormer** (`sortformer-local`) is a selectable CPU ONNX alternative. Periodic NeMo background health on the GPU host is off unless **`BABEL_ENABLE_NEMO_BACKGROUND_HEALTH`** is enabled.
 - Transcript JSON under `transcripts/` is named from the **ingested source media** stem even when vocal separation uses a generated stem (for example `vocals.wav`); **`VocalSeparationEnabled`** is coerced off when the container reports the audio separator is not ready.
 
 ## Testing Requirements

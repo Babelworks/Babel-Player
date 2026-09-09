@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Babel.Player.Models;
 using Babel.Player.Services.Credentials;
 using Babel.Player.Services.Settings;
+using Babel.Player.Services.SortFormer;
 
 namespace Babel.Player.Services.Registries;
 
@@ -73,6 +74,16 @@ public sealed class DiarizationRegistry : IDiarizationRegistry
             DefaultRuntime: InferenceRuntime.Local,
             IsImplemented: true,
             Notes: "Uses the managed CPU WeSpeaker provider."),
+        new ProviderDescriptor(
+            ProviderNames.SortFormerLocal,
+            "SortFormer",
+            false,
+            null,
+            [SortFormerModelCatalog.ModelId],
+            SupportedRuntimes: [InferenceRuntime.Local],
+            DefaultRuntime: InferenceRuntime.Local,
+            IsImplemented: true,
+            Notes: "CPU ONNX SortFormer diarization (max 4 speakers)."),
     ];
 
     /// <summary>
@@ -113,6 +124,9 @@ public sealed class DiarizationRegistry : IDiarizationRegistry
                 _log,
                 _containerizedProbe),
             ProviderNames.WeSpeakerLocal => new WeSpeakerCpuDiarizationProvider(_log),
+            ProviderNames.SortFormerLocal => new SortFormerDiarizationProvider(
+                _log,
+                ModelDownloader.ResolveSortFormerModelDir(settings.SortFormerModelDir)),
             _ => throw new PipelineProviderException(
                 $"Diarization provider '{providerId}' is not implemented. " +
                 "Select an implemented provider in Settings.")

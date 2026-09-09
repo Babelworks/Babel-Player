@@ -83,6 +83,7 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.0.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.1" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.1" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="System.Reactive" Version="6.1.0" />
     <!-- Override Avalonia.FreeDesktop's vulnerable transitive D-Bus dependency. -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />

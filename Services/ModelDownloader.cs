@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Babel.Player.Models;
 using Babel.Player.Services.Chatterbox;
+using Babel.Player.Services.SortFormer;
 
 namespace Babel.Player.Services;
 
@@ -507,6 +508,82 @@ except Exception as e:
         }
 
         _log.Info("Chatterbox model downloaded successfully.");
+        return true;
+    }
+
+    public static string ResolveSortFormerModelDir(string? modelDir)
+    {
+        if (!string.IsNullOrEmpty(modelDir))
+            return modelDir;
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return Path.Combine(localAppData, "BabelPlayer", "models", "sortformer-4spk");
+    }
+
+    public static bool IsSortFormerModelDownloaded(string? modelDir)
+    {
+        var resolvedDir = ResolveSortFormerModelDir(modelDir);
+        if (!Directory.Exists(resolvedDir))
+            return false;
+
+        foreach (var relativePath in SortFormerModelCatalog.RequiredFiles)
+        {
+            var info = new FileInfo(Path.Combine(resolvedDir, relativePath));
+            if (!info.Exists || info.Length == 0)
+                return false;
+        }
+
+        var modelPath = Path.Combine(resolvedDir, SortFormerModelCatalog.RelativeModelPath);
+        return SortFormerModelFiles.TryVerifySha256(modelPath, out _);
+    }
+
+    public async Task<bool> DownloadSortFormerModelAsync(
+        string? modelDir,
+        IProgress<double>? progress = null,
+        CancellationToken token = default)
+    {
+        var resolvedDir = ResolveSortFormerModelDir(modelDir);
+        try
+        {
+            Directory.CreateDirectory(resolvedDir);
+            Directory.CreateDirectory(Path.Combine(resolvedDir, "onnx"));
+        }
+        catch (Exception ex)
+        {
+            _log.Warning($"Could not create SortFormer model directory '{resolvedDir}': {ex.Message}");
+            return false;
+        }
+
+        var destinationPath = Path.Combine(resolvedDir, SortFormerModelCatalog.RelativeModelPath);
+        if (IsSortFormerModelDownloaded(resolvedDir))
+        {
+            progress?.Report(1.0);
+            return true;
+        }
+
+        var existingInfo = new FileInfo(destinationPath);
+        if (existingInfo.Exists)
+        {
+            try { existingInfo.Delete(); }
+            catch { /* re-download below */ }
+        }
+
+        _log.Info($"Downloading SortFormer model: {SortFormerModelCatalog.HubFileName}");
+        if (!await DownloadFileAsync(SortFormerModelCatalog.ModelDownloadUrl, destinationPath, progress, token))
+            return false;
+
+        if (!SortFormerModelFiles.TryVerifySha256(destinationPath, out var actualHash))
+        {
+            _log.Warning(
+                $"SortFormer download failed SHA-256 verification (got {actualHash ?? "<none>"}, " +
+                $"expected {SortFormerModelCatalog.Sha256}).");
+            try { File.Delete(destinationPath); }
+            catch { /* best effort */ }
+            return false;
+        }
+
+        _log.Info("SortFormer model downloaded successfully.");
+        progress?.Report(1.0);
         return true;
     }
 

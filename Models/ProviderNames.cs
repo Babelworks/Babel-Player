@@ -53,6 +53,8 @@ public static class ProviderNames
     public const string WeSpeakerDiarizationAlias = "wespeaker";
     public const string NemoLocal = "nemo-local";
     public const string WeSpeakerLocal = "wespeaker-local";
+    public const string SortFormerLocal = "sortformer-local";
+    public const string SortFormerDiarizationAlias = "sortformer";
 }
 
 /// <summary>

@@ -12,6 +12,7 @@ public sealed class ConverterTests
     [InlineData("", "Off")]
     [InlineData(ProviderNames.NemoLocal, "NeMo")]
     [InlineData(ProviderNames.WeSpeakerLocal, "WeSpeaker")]
+    [InlineData(ProviderNames.SortFormerLocal, "SortFormer")]
     [InlineData("custom-provider", "custom-provider")]
     public void DiarizationProviderDisplayConverter_MapsKnownProvidersAndOff(string? providerId, string expected)
     {

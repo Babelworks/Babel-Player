@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Babel.Player.Models;
 using Babel.Player.Services;
+using Babel.Player.Services.SortFormer;
 
 
 namespace Babel.Player.ViewModels;
@@ -76,6 +77,15 @@ public sealed class ModelsTabViewModel : ViewModelBase
                     coordinator.CurrentSettings.ChatterboxModelDir, progress, token),
                 downloader: downloader));
         }
+
+        // ── SortFormer ────────────────────────────────────────────────────────
+        entries.Add(new ModelDownloadEntry(
+            providerLabel: "SortFormer",
+            modelId: SortFormerModelCatalog.ModelId,
+            isDownloadedFunc: () => ModelDownloader.IsSortFormerModelDownloaded(coordinator.CurrentSettings.SortFormerModelDir),
+            downloadFunc: (progress, token) => downloader.DownloadSortFormerModelAsync(
+                coordinator.CurrentSettings.SortFormerModelDir, progress, token),
+            downloader: downloader));
 
         Models = new ObservableCollection<ModelDownloadEntry>(entries);
     }

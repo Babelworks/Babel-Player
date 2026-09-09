@@ -409,6 +409,26 @@
                                           FontSize="12"
                                           Foreground="{DynamicResource PrimaryTextBrush}"
                                           IsChecked="{Binding Playback.SpeakerRouting.DetectMultipleSpeakers, Mode=TwoWay}" />
+                                <StackPanel Spacing="4"
+                                            IsVisible="{Binding Playback.SpeakerRouting.IsDiarizationProviderSelectable}">
+                                    <TextBlock Text="{local:Localize Label_DiarizationProvider}"
+                                               Classes="text-caption"
+                                               Foreground="{DynamicResource StatusTextBrush}" />
+                                    <ComboBox ItemsSource="{Binding Playback.SpeakerRouting.AvailableLocalDiarizationProviders}"
+                                              SelectedItem="{Binding Playback.SpeakerRouting.DiarizationProvider, Mode=TwoWay}"
+                                              HorizontalAlignment="Stretch"
+                                              FontSize="12">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource DiarizationProviderDisplayConverter}}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <TextBlock FontSize="11"
+                                               Foreground="{DynamicResource StatusTextBrush}"
+                                               TextWrapping="Wrap"
+                                               Text="{local:Localize Hint_DiarizationProvider}" />
+                                </StackPanel>
                             </StackPanel>
 
                             <!-- Status -->
