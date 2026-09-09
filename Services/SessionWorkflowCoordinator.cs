@@ -427,6 +427,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
         // Stash current snapshot before switching — persist to disk so it survives restart.
         if (!string.IsNullOrEmpty(CurrentSession.SourceMediaPath))
         {
+            FlushPendingSave();
             RecentSessions = _sessionSwitchService.StashCurrentSession(
                 CurrentSession,
                 _mediaSnapshotCache,
@@ -441,6 +442,8 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
         var cached = switchingMedia
             ? _sessionSwitchService.LoadSessionForMedia(sourceMediaPath, _mediaSnapshotCache)
             : null;
+        if (cached is null && (switchingMedia || string.IsNullOrEmpty(CurrentSession.SourceMediaPath)))
+            cached = TryLoadProjectFolderSession(sourceMediaPath);
         if (cached is not null)
         {
             // Returning to a previously processed media — restore, validate, then copy into

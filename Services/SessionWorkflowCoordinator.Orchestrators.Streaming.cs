@@ -198,6 +198,14 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                     streamRequest,
                     forwardingWriter,
                     pipelineToken).ConfigureAwait(false);
+                if (!transcriptionResult.Success)
+                {
+                    throw new InvalidOperationException(
+                        string.IsNullOrWhiteSpace(transcriptionResult.ErrorMessage)
+                            ? "Streaming transcription failed."
+                            : transcriptionResult.ErrorMessage);
+                }
+
                 forwardingWriter.TryComplete();
 
                 await transcriptArtifactWriter.CompleteAsync(transcriptionResult, transcriptPath, pipelineToken).ConfigureAwait(false);

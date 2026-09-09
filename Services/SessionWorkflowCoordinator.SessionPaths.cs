@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Babel.Player.Models;
 
 namespace Babel.Player.Services;
 
@@ -70,6 +71,39 @@ public sealed partial class SessionWorkflowCoordinator
         }
 
         return resolved;
+    }
+
+    private WorkflowSessionSnapshot? TryLoadProjectFolderSession(string sourceMediaPath)
+    {
+        if (!CurrentSettings.StoreProjectsNextToMedia && _projectDirectoryOverride is null)
+            return null;
+
+        var projectDir = !string.IsNullOrWhiteSpace(_projectDirectoryOverride)
+            ? _projectDirectoryOverride
+            : ProjectFolder.TryGetDefaultDirectory(sourceMediaPath);
+
+        if (projectDir is null)
+            return null;
+
+        var sessionsRoot = Path.Combine(projectDir, ProjectFolder.SessionsFolderName);
+        if (!Directory.Exists(sessionsRoot))
+            return null;
+
+        try
+        {
+            if (string.Equals(
+                    Path.GetFullPath(sessionsRoot),
+                    Path.GetFullPath(_perSessionStore.SessionsRoot),
+                    StringComparison.OrdinalIgnoreCase))
+                return null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        using var store = new PerSessionSnapshotStore(sessionsRoot, _log);
+        return store.TryLoadLatestForSourceMedia(sourceMediaPath);
     }
 
     private static string? NormalizeProjectDirectory(string? projectDirectory)

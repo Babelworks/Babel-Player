@@ -38,17 +38,13 @@ public sealed class PerSessionSnapshotStore : IDisposable
     public string GetSessionDirectory(Guid sessionId) => SessionDir(sessionId);
 
     /// <summary>Writes <c>sessions/[SessionId]/snapshot.json</c>. Non-fatal on failure.</summary>
-    public void Save(WorkflowSessionSnapshot snapshot)
+    public void Save(WorkflowSessionSnapshot snapshot, string? extraSessionDirectory = null)
     {
         // Serialize inside the gate so gate-acquisition order matches file-write order.
         _saveGate.Wait();
         try
         {
-            var json = JsonSerializer.Serialize(snapshot, SerializerOptions);
-            var dir = SessionDir(snapshot.SessionId);
-            Directory.CreateDirectory(dir);
-            var path = SnapshotPath(snapshot.SessionId);
-            JsonStorePersistence.AtomicWriteText(path, json);
+            WriteSnapshotUnsafe(snapshot, extraSessionDirectory);
         }
         catch (Exception ex)
         {
@@ -64,16 +60,12 @@ public sealed class PerSessionSnapshotStore : IDisposable
     /// Asynchronous counterpart to <see cref="Save"/>. Use from async pipeline code to avoid
     /// blocking the caller on disk I/O. Non-fatal on failure (errors are logged and swallowed).
     /// </summary>
-    public async Task SaveAsync(WorkflowSessionSnapshot snapshot)
+    public async Task SaveAsync(WorkflowSessionSnapshot snapshot, string? extraSessionDirectory = null)
     {
         await _saveGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var json = JsonSerializer.Serialize(snapshot, SerializerOptions);
-            var dir = SessionDir(snapshot.SessionId);
-            Directory.CreateDirectory(dir);
-            var path = SnapshotPath(snapshot.SessionId);
-            await JsonStorePersistence.AtomicWriteTextAsync(path, json).ConfigureAwait(false);
+            await WriteSnapshotUnsafeAsync(snapshot, extraSessionDirectory).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -155,6 +147,87 @@ public sealed class PerSessionSnapshotStore : IDisposable
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Returns the newest snapshot whose <see cref="WorkflowSessionSnapshot.SourceMediaPath"/>
+    /// matches <paramref name="sourceMediaPath"/>, or null if none exists.
+    /// </summary>
+    public WorkflowSessionSnapshot? TryLoadLatestForSourceMedia(string sourceMediaPath)
+    {
+        if (string.IsNullOrWhiteSpace(sourceMediaPath))
+            return null;
+
+        WorkflowSessionSnapshot? latest = null;
+        foreach (var snapshot in LoadAll())
+        {
+            if (!SameMediaPath(snapshot.SourceMediaPath, sourceMediaPath))
+                continue;
+            if (latest is null || snapshot.LastUpdatedAtUtc > latest.LastUpdatedAtUtc)
+                latest = snapshot;
+        }
+
+        return latest;
+    }
+
+    private void WriteSnapshotUnsafe(WorkflowSessionSnapshot snapshot, string? extraSessionDirectory)
+    {
+        var json = JsonSerializer.Serialize(snapshot, SerializerOptions);
+        WriteSnapshotJson(SessionDir(snapshot.SessionId), json);
+        if (TryGetDistinctExtraDirectory(snapshot.SessionId, extraSessionDirectory) is { } extraDir)
+            WriteSnapshotJson(extraDir, json);
+    }
+
+    private async Task WriteSnapshotUnsafeAsync(WorkflowSessionSnapshot snapshot, string? extraSessionDirectory)
+    {
+        var json = JsonSerializer.Serialize(snapshot, SerializerOptions);
+        await WriteSnapshotJsonAsync(SessionDir(snapshot.SessionId), json).ConfigureAwait(false);
+        if (TryGetDistinctExtraDirectory(snapshot.SessionId, extraSessionDirectory) is { } extraDir)
+            await WriteSnapshotJsonAsync(extraDir, json).ConfigureAwait(false);
+    }
+
+    private string? TryGetDistinctExtraDirectory(Guid sessionId, string? extraSessionDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(extraSessionDirectory))
+            return null;
+
+        try
+        {
+            var extra = Path.GetFullPath(extraSessionDirectory);
+            var primary = Path.GetFullPath(SessionDir(sessionId));
+            return string.Equals(extra, primary, StringComparison.OrdinalIgnoreCase) ? null : extra;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static void WriteSnapshotJson(string sessionDirectory, string json)
+    {
+        Directory.CreateDirectory(sessionDirectory);
+        JsonStorePersistence.AtomicWriteText(Path.Combine(sessionDirectory, "snapshot.json"), json);
+    }
+
+    private static Task WriteSnapshotJsonAsync(string sessionDirectory, string json)
+    {
+        Directory.CreateDirectory(sessionDirectory);
+        return JsonStorePersistence.AtomicWriteTextAsync(Path.Combine(sessionDirectory, "snapshot.json"), json);
+    }
+
+    private static bool SameMediaPath(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+            return false;
+
+        try
+        {
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private string SessionDir(Guid sessionId) =>

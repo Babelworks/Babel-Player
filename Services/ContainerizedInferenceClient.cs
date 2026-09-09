@@ -197,6 +197,7 @@ public sealed class ContainerizedInferenceClient : IDisposable
     {
         ArgumentNullException.ThrowIfNull(writer);
 
+        Exception? completionError = null;
         try
         {
             using var lease = AcquireLease(ContainerizedRequestKind.Transcription);
@@ -309,12 +310,13 @@ public sealed class ContainerizedInferenceClient : IDisposable
         }
         catch (Exception ex)
         {
+            completionError = ex;
             _log.Error($"Streaming transcription failed: {ex.Message}", ex);
-            return new TranscriptionResult(false, [], language ?? "unknown", 0.0, ex.Message);
+            throw;
         }
         finally
         {
-            writer.TryComplete();
+            writer.TryComplete(completionError);
         }
     }
 
