@@ -54,8 +54,9 @@ public static class DubCli
         bool noDiarization = HasFlag(args, "--no-diarization");
         bool noMp4 = HasFlag(args, "--no-mp4");
         bool consentClone = HasFlag(args, "--consent-clone");
+        bool keepRenders = HasFlag(args, "--keep-renders");
 
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--no-diarization", "--no-mp4", "--consent-clone", "--help", "-h" };
+        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -133,6 +134,8 @@ public static class DubCli
 
             if (consentClone)
                 settings.ChatterboxVoiceCloneConsent = true;
+            if (keepRenders)
+                settings.KeepRenderArtifacts = true;
 
             Console.WriteLine($"[dub] transcription : {settings.TranscriptionProvider} ({settings.TranscriptionModel})");
             Console.WriteLine($"[dub] translation  : {settings.TranslationProvider} -> {settings.TargetLanguage}");
@@ -241,9 +244,18 @@ public static class DubCli
                 }
             }
 
-            TryDeleteQuiet(render.DubTimelinePath);
-            if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
-                TryDeleteQuiet(render.MixedWithAmbiancePath);
+            if (settings.KeepRenderArtifacts)
+            {
+                Console.WriteLine($"[dub] kept {render.DubTimelinePath}");
+                if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
+                    Console.WriteLine($"[dub] kept {render.MixedWithAmbiancePath}");
+            }
+            else
+            {
+                TryDeleteQuiet(render.DubTimelinePath);
+                if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
+                    TryDeleteQuiet(render.MixedWithAmbiancePath);
+            }
             timings.Mark("video-export", stopwatch.Elapsed);
 
             WriteRunTimings(outputDir, stem, timings, startedUtc);
@@ -386,6 +398,7 @@ public static class DubCli
         Console.WriteLine("  --no-diarization        Skip diarization for this run");
         Console.WriteLine("  --no-mp4                Skip MP4 export (SRT + MP3 only)");
         Console.WriteLine("  --consent-clone         Grant voice-cloning consent for this run");
+        Console.WriteLine("  --keep-renders          Keep intermediate render files for debugging");
         Console.WriteLine("  --help, -h              Show this help");
         Console.WriteLine();
         Console.WriteLine("Examples:");
