@@ -30,6 +30,10 @@ effective TTS provider is Chatterbox, `--consent-clone` is mandatory and is
 not persisted. When a TTS override is given and the session already reached
 the Translated stage, TTS re-runs under the requested provider and voice.
 
+Every run writes `{stem}-captions.srt`, `{stem}-dub.mp3`, `{stem}-dub.mp4`
+(unless `--no-mp4`), plus a `{stem}-dub.manifest.json` sidecar recording the
+providers, voice, language, segment count, timestamps, and exit code.
+
 ## --tui (interactive menu)
 
 ```text
