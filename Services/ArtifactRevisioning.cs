@@ -28,7 +28,7 @@ internal static class ArtifactRevisioning
         if (!File.Exists(finalPath))
             return null;
 
-        for (int revision = 1; ; revision++)
+        for (int revision = 1; revision <= 9999; revision++)
         {
             string candidate = BuildRevisionPath(finalPath, revision);
             if (File.Exists(candidate))
