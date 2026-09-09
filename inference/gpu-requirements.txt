@@ -12,7 +12,7 @@ python-multipart==0.0.31
 faster-whisper==1.2.1
 numpy>=1.22.0,<2.0
 scipy==1.14.1
-transformers==4.46.3
+transformers==5.10.1
 sentencepiece==0.2.1
 safetensors==0.6.2
 accelerate==1.12.0
