@@ -22,7 +22,8 @@ sealed class Program
         if (Array.Exists(args, a =>
                 string.Equals(a, "--benchmark", StringComparison.OrdinalIgnoreCase)))
         {
-            AttachConsole(-1); // attach to parent terminal; no-op if none exists
+            if (OperatingSystem.IsWindows())
+                AttachConsole(-1); // attach to parent terminal; no-op if none exists
             return BenchmarkCli.RunAsync(args).GetAwaiter().GetResult();
         }
 
@@ -33,6 +34,16 @@ sealed class Program
             if (OperatingSystem.IsWindows())
                 AttachConsole(-1);
             return DubCli.RunAsync(args).GetAwaiter().GetResult();
+        }
+
+        // Intercept --tui before Avalonia sees the args (interactive terminal UI
+        // over the same pipeline engine).
+        if (Array.Exists(args, a =>
+                string.Equals(a, "--tui", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (OperatingSystem.IsWindows())
+                AttachConsole(-1);
+            return DubTui.RunAsync(args).GetAwaiter().GetResult();
         }
 
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

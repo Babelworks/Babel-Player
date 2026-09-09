@@ -85,6 +85,7 @@ public partial class EmbeddedPlaybackViewModel
     [NotifyPropertyChangedFor(nameof(ShowTtsAssignmentModeSwitch))]
     [NotifyPropertyChangedFor(nameof(ShowPerSpeakerVoiceHint))]
     [NotifyPropertyChangedFor(nameof(TtsVoiceComboHeaderText))]
+    [NotifyPropertyChangedFor(nameof(IsChatterboxTtsSelected))]
     private string _ttsProvider = ProviderNames.EdgeTts;
 
     [ObservableProperty]
@@ -291,6 +292,31 @@ public partial class EmbeddedPlaybackViewModel
     public bool ShowTtsAssignmentModeSwitch =>
         string.Equals(TtsProvider, ProviderNames.Piper, StringComparison.Ordinal)
         || string.Equals(TtsProvider, ProviderNames.EdgeTts, StringComparison.Ordinal);
+
+    internal static bool IsChatterboxProvider(string? providerId) =>
+        string.Equals(providerId, ProviderNames.Chatterbox, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when the selected TTS provider performs voice cloning.</summary>
+    public bool IsChatterboxTtsSelected => IsChatterboxProvider(TtsProvider);
+
+    /// <summary>
+    /// Persisted explicit opt-in to Chatterbox voice cloning. Read live by
+    /// <see cref="TtsRegistry.CheckReadiness"/> on every run; unchecking takes
+    /// effect immediately without touching the provider selection.
+    /// </summary>
+    public bool ChatterboxVoiceCloneConsent
+    {
+        get => _coordinator.CurrentSettings.ChatterboxVoiceCloneConsent;
+        set
+        {
+            if (_coordinator.CurrentSettings.ChatterboxVoiceCloneConsent == value)
+                return;
+
+            _coordinator.CurrentSettings.ChatterboxVoiceCloneConsent = value;
+            _coordinator.NotifySettingsModified();
+            OnPropertyChanged();
+        }
+    }
 
     public bool ShowPerSpeakerVoiceHint =>
         ShowTtsAssignmentModeSwitch && TtsVoiceAssignmentMode == TtsVoiceAssignmentMode.PerSpeaker;
@@ -556,6 +582,7 @@ public partial class EmbeddedPlaybackViewModel
             OnPropertyChanged(nameof(AvailableTtsOptions));
             NotifyTtsAssignmentModeUi();
             OnPropertyChanged(nameof(VocalSeparationEnabled));
+            OnPropertyChanged(nameof(ChatterboxVoiceCloneConsent));
             OnPropertyChanged(nameof(DubTimingMode));
             NotifyVocalSeparationCapabilityProperties();
             SpeakerRouting.SyncFromSettings();
