@@ -1,6 +1,6 @@
 # Copilot Instructions for Babel Player
 
-Before non-trivial work, read `AGENTS.md`, `docs/PLAN.md`, and `docs/architecture.md`. If you touch milestone-specific behavior, also check the relevant smoke note in `docs/history/smoke/`.
+Before non-trivial work, read in this order: `AGENTS.md`, `docs/AI-CONTEXT.md`, `docs/architecture.md`, `docs/PLAN.md`, then `docs/Engineering-Plan.md`. If you touch milestone-specific behavior, also check the relevant smoke note in `docs/history/smoke/`.
 
 ## Build, test, and lint commands
 
@@ -8,17 +8,15 @@ Before non-trivial work, read `AGENTS.md`, `docs/PLAN.md`, and `docs/architectur
 # Build the solution
 dotnet build Babel-Player.sln
 
-# Run the full test suite
-dotnet test Babel-Player.sln
+# Maintained day-to-day test suite (preferred)
+dotnet test BabelPlayer.Tests/BabelPlayer.Tests.csproj -c Release
 
-# Run a single test class
-dotnet test Babel-Player.sln --filter "FullyQualifiedName~SessionWorkflowCoordinatorUnitTests"
+# Smoke subset
+dotnet test BabelPlayer.Tests/BabelPlayer.Tests.csproj -c Release --filter "Category=Smoke"
 
-# Run a single test method
-dotnet test Babel-Player.sln --filter "FullyQualifiedName~SessionWorkflowCoordinatorUnitTests.Initialize_NoSavedSnapshot_CreatesFoundationSession"
-
-# Run the core test subset used by the pre-push hook
-dotnet test Babel-Player.sln --filter "Category!=Integration&Category!=RequiresPython&Category!=RequiresFfmpeg&Category!=RequiresExternalTranslation"
+# Run a single test class or method
+dotnet test BabelPlayer.Tests/BabelPlayer.Tests.csproj -c Release --filter "FullyQualifiedName~SessionWorkflowCoordinatorUnitTests"
+dotnet test BabelPlayer.Tests/BabelPlayer.Tests.csproj -c Release --filter "FullyQualifiedName~SessionWorkflowCoordinatorUnitTests.Initialize_NoSavedSnapshot_CreatesFoundationSession"
 
 # Architecture linter
 python3 scripts/check-architecture.py
@@ -30,12 +28,14 @@ python -m py_compile inference/main.py
 dotnet run -c Dev
 ```
 
+Do **not** treat `dotnet test Babel-Player.sln` as the routine verification path. See `docs/testing-requirements.md` and `AGENTS.md`.
+
 Test categories used in this repo:
 
-- `Integration`
-- `RequiresPython`
-- `RequiresFfmpeg`
-- `RequiresExternalTranslation`
+- `Smoke`
+- `Quarantined`
+- `Integration` (not in the maintained compiled suite policy)
+- `RequiresPython` / `RequiresFfmpeg` / `RequiresExternalTranslation` (do not add to maintained suite)
 
 ## High-level architecture
 
@@ -61,8 +61,8 @@ Test categories used in this repo:
 - Use `InferenceRuntimeCatalog` for provider/profile/runtime normalization instead of duplicating compute-selection logic in UI or service code.
 - Missing capability/readiness should surface as a truthful blocked state with remediation, not a fake-ready UI path. If you add a fallback, it must be explicit in status/logging.
 - Keep storage and identity names consistent by context: product branding is `Babel Player`, the repo is `Babel-Player`, and persisted app paths/identifiers use `BabelPlayer`.
-- **Avoid UI Verbosity:** Adhere to the verbosity audit (April 2026): avoid over-explaining how the "sausage is made" in user-facing status messages. Prefer concise, professional labels (e.g., "Ready", "Reset to [Stage]") over internal technical descriptions. Do not include instructional filler for standard UI elements.
-- This repo is milestone-driven. Avoid broad refactors, speculative extension points, or “future-proof” abstractions unless they directly support the current milestone in `docs/PLAN.md`.
+- **Avoid UI Verbosity:** Prefer concise, professional labels (e.g., "Ready", "Reset to [Stage]") over internal technical descriptions. Do not include instructional filler for standard UI elements.
+- This repo is milestone-driven. Avoid broad refactors, speculative extension points, or “future-proof” abstractions unless they directly support the current work tracked in `docs/PLAN.md` / `docs/Next-Priorities-*.md`.
 - For benchmark or hardware-routing work, capture the machine/runtime environment first and keep comparisons hardware-specific. Existing repo instructions expect an `Environment Snapshot` section and hardware-profile tokens such as `int8_8c16t_32g` in benchmark matrices.
 
 ## MCP server setup guidance

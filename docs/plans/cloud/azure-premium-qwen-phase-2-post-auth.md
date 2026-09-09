@@ -16,7 +16,7 @@ It is intentionally written so you can prepare the Azure side now, but some valu
 
 ## What This Phase Assumes
 
-You already completed [azure-premium-qwen-step-by-step.md](/D:/Dev/Babel-Player/docs/azure-premium-qwen-step-by-step.md:1) through Step 8.
+You already completed [azure-premium-qwen-step-by-step.md](azure-premium-qwen-step-by-step.md) through Step 8.
 
 That means all of this should already exist:
 
@@ -355,7 +355,7 @@ Once the premium flow works in Azure:
 
 ### Repo seam
 
-The current external-host seam already exists in [AppSettings.cs](/D:/Dev/Babel-Player/Services/Settings/AppSettings.cs:205).
+The current external-host seam already exists in [AppSettings.cs](Services/Settings/AppSettings.cs).
 
 ## Step 8: End-to-End Premium Test
 
@@ -391,7 +391,7 @@ These items should be replaced once the repo-side implementation is finished:
 
 ## Reference Files in This Repo
 
-- Main prep doc: [azure-premium-qwen-step-by-step.md](/D:/Dev/Babel-Player/docs/azure-premium-qwen-step-by-step.md:1)
-- Worker safety note: [inference/main.py](/D:/Dev/Babel-Player/inference/main.py:3205)
-- Worker image definition: [inference/Dockerfile](/D:/Dev/Babel-Player/inference/Dockerfile:1)
-- External host seam: [AppSettings.cs](/D:/Dev/Babel-Player/Services/Settings/AppSettings.cs:205)
+- Main prep doc: [azure-premium-qwen-step-by-step.md](azure-premium-qwen-step-by-step.md)
+- Worker safety note: [inference/main.py](inference/main.py)
+- Worker image definition: [inference/Dockerfile](inference/Dockerfile)
+- External host seam: [AppSettings.cs](Services/Settings/AppSettings.cs)

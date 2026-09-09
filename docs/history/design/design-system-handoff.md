@@ -2,7 +2,7 @@
 ## Target: Fix audit issues and bring system to consistent state
 
 **Prepared:** 2026-04-07  
-**Stack:** C# / .NET 10 · Avalonia 12.0 RC1 · Fluent theme  
+**Stack:** C# / .NET 10 · Avalonia 12.0.1 · Fluent theme  
 **Source of truth:** `App.axaml` ThemeDictionaries  
 **Files touched by this spec:** `App.axaml`, `MainWindow.axaml`, `SettingsWindow.axaml`, `ApiKeysDialog.axaml`
 

@@ -1,11 +1,14 @@
 # Agent / IDE context
 
-All AI assistants should read these files:
+Read these files in order:
 
-1. [docs/AI-CONTEXT.md](../AI-CONTEXT.md) — single source of truth for project context
-2. [AGENTS.md](../../AGENTS.md) — operating rules and learned preferences
+1. [AGENTS.md](../../AGENTS.md) — operating rules, preferences, testing constraints
+2. [docs/AI-CONTEXT.md](../AI-CONTEXT.md) — current repo structure, providers, commands
+3. [docs/architecture.md](../architecture.md) — structural boundaries
+4. [docs/PLAN.md](../PLAN.md) — docs map and status index
+5. [docs/Engineering-Plan.md](../Engineering-Plan.md) — engineering status
 
-Agent-specific stubs (contain only tool-specific instructions, point to AI-CONTEXT.md for everything else):
+Agent-specific stubs (tool-specific only; defer to the chain above for repo truth):
 
-- [GEMINI.md](GEMINI.md) — Gemini-oriented assistants
-- [QWEN.md](QWEN.md) — Qwen Coder-style setups
+- [GEMINI.md](GEMINI.md)
+- [QWEN.md](QWEN.md)

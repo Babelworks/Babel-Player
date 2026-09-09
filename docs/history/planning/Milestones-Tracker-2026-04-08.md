@@ -7,9 +7,9 @@
 
 Current status moved to:
 
-- [Engineering-Plan.md](Engineering-Plan.md)
-- [Next-Priorities-2026-04-16.md](Next-Priorities-2026-04-16.md)
-- [history/smoke/](history/smoke/)
+- [Engineering-Plan.md](../../Engineering-Plan.md)
+- [Next-Priorities-2026-04-16.md](../../Next-Priorities-2026-04-16.md)
+- [history/smoke/](../smoke/)
 
 Reason for retirement:
 

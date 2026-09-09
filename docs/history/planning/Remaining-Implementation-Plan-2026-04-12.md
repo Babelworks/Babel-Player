@@ -7,9 +7,9 @@
 
 Use these instead:
 
-- [Engineering-Plan.md](Engineering-Plan.md) for maintained current status
-- [Next-Priorities-2026-04-16.md](Next-Priorities-2026-04-16.md) for the short active worklist
-- [history/smoke/](history/smoke/) for milestone evidence
+- [Engineering-Plan.md](../../Engineering-Plan.md) for maintained current status
+- [Next-Priorities-2026-04-16.md](../../Next-Priorities-2026-04-16.md) for the short active worklist
+- [history/smoke/](../smoke/) for milestone evidence
 
 Why this was retired:
 

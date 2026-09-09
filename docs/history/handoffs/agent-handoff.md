@@ -1,8 +1,8 @@
 # Agent Handoff — Babel Player Alpha
 
-> Written 2026-09-08 (UTC) after the v1.3.0 release and the Chatterbox voice-cloning
-> port. Give this file to a new agent session for full context. It is a point-in-time
-> snapshot — verify PR states with `gh` before acting on them.
+> **Historical handoff** (written 2026-09-08 UTC). Point-in-time snapshot only.
+> Canonical docs: `AGENTS.md` → `docs/AI-CONTEXT.md` → `docs/architecture.md` → `docs/PLAN.md`.
+> Verify PR states with `gh` before acting on anything below.
 
 ## 1. What this is
 
@@ -13,9 +13,8 @@ TTS → preview → export (SRT/MP3/MP4). Public alpha at
 Local checkout: `D:\Dev\Babel-Player-Proto` (folder rename to match GitHub was
 skipped — a live handle blocks it; cosmetic only, nothing references the path).
 
-Docs map: `AGENTS.md` (repo rules) → `docs/AI-CONTEXT.md` → `docs/architecture.md`
-→ `docs/babel-2.0-tenets.md` (the 10 disciplinary rules for 2.0 work — READ THIS
-before any inference/architecture change) → `docs/aws-offload-lane.md` (Phase 3).
+Docs map: `AGENTS.md` → `docs/AI-CONTEXT.md` → `docs/architecture.md` →
+`docs/reference/babel-2.0-tenets.md` → `docs/plans/cloud/aws-offload-lane.md` (Phase 3).
 
 ## 2. Where things stand
 
@@ -74,7 +73,7 @@ before any inference/architecture change) → `docs/aws-offload-lane.md` (Phase 
    events (`.Sample(TimeSpan.FromMilliseconds(16))`) to prevent high-frequency UI events from 
    flooding unmanaged ONNX runtime inference sessions or choking thread allocation.
 7. **Deepgram provider** (Nova-3 ASR) — clean `ITranscriptionProvider` seam job.
-8. **Phase 3 AWS lane** per `docs/aws-offload-lane.md` (Batch shape, G5/G6 bench,
+8. **Phase 3 AWS lane** per `docs/plans/cloud/aws-offload-lane.md` (Batch shape, G5/G6 bench,
    Spot, S3 layout, Bedrock workloads) — co-design with the partner team.
 9. **Hygiene backlog**: triage 28 Dependabot alerts; `gemini-*` workflows need
    secrets or disabling (user doesn't know what they are — recommend disable);
@@ -142,7 +141,7 @@ before any inference/architecture change) → `docs/aws-offload-lane.md` (Phase 
   `Services/Registries/*` (provider matrix), `scripts/fetch-win-native-deps.ps1`,
   `Directory.Build.targets` + `BabelPlayer.csproj` (native staging).
 - Partner context: AWS SA thread (Batch/G5-G6/Spot, Bedrock case #178778897900076),
-  Deepgram (cloud ASR candidate). Details in `docs/aws-offload-lane.md`.
+  Deepgram (cloud ASR candidate). Details in `docs/plans/cloud/aws-offload-lane.md`.
 
 ## 8. Open questions for the human
 

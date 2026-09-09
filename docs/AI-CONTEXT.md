@@ -1,7 +1,7 @@
 # Babel Player — AI Context
 
 > Purpose: one current repo-context file for contributors and agents.
-> Last verified against the codebase: 2026-04-18.
+> Last verified against the codebase: 2026-09-09.
 
 ---
 
@@ -194,6 +194,9 @@ Babel-Player/
 │   ├── PLAN.md
 │   ├── Engineering-Plan.md
 │   ├── history/
+│   ├── reference/
+│   ├── plans/
+│   ├── model-audits/
 │   └── context/
 ├── inference/
 ├── native/

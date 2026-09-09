@@ -1,5 +1,5 @@
 ## Repo Context
-- For current repo truth, read in this order: `docs/AI-CONTEXT.md`, `AGENTS.md`, `docs/architecture.md`, `docs/PLAN.md`.
+- For current repo truth, read in this order: `AGENTS.md`, `docs/AI-CONTEXT.md`, `docs/architecture.md`, `docs/PLAN.md`, then `docs/Engineering-Plan.md`.
 - Keep agent context files minimal; do not duplicate repo status or tool assumptions in them.
 
 ## Learned User Preferences

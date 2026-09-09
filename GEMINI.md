@@ -1,6 +1,4 @@
 # Babel Player — Gemini Context
 
-> For full project context, see [docs/AI-CONTEXT.md](docs/AI-CONTEXT.md).
-> For operating rules and preferences, see [AGENTS.md](AGENTS.md).
-> For milestone order and gates, see [docs/PLAN.md](docs/PLAN.md).
-> For structural boundaries, see [docs/architecture.md](docs/architecture.md).
+> For the full read order, see [docs/context/README.md](docs/context/README.md).
+> Start with [AGENTS.md](AGENTS.md), then [docs/AI-CONTEXT.md](docs/AI-CONTEXT.md).
