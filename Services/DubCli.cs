@@ -358,6 +358,16 @@ public static class DubCli
             ? Path.Combine(appDataRoot, "sessions")
             : Path.Combine(Path.GetFullPath(projectDir.Trim()), "sessions");
 
+    /// <summary>
+    /// State directory for current session snapshot: project-local when <c>--project-dir</c> is
+    /// given (so session state is isolated per-project), otherwise the machine-local app data
+    /// state folder.
+    /// </summary>
+    internal static string ResolveStateRoot(string appDataRoot, string? projectDir) =>
+        string.IsNullOrWhiteSpace(projectDir)
+            ? Path.Combine(appDataRoot, "state")
+            : Path.Combine(Path.GetFullPath(projectDir.Trim()), "sessions", "state");
+
     internal static bool IsValidProjectDir(string projectDir)
     {
         try

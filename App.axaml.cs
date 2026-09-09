@@ -131,7 +131,7 @@ public partial class App : Application
                 log: appLog);
             _sessionWorkflowCoordinator = DependencyLocator.CreateSessionCoordinator(
                 appLog, appSettings, perSessionStore, recentStore, _apiKeyStore, transportManager, 
-                appDataRoot, _startupLog, out var primaryGpuManager);
+                Path.Combine(appDataRoot, "state"), _startupLog, out var primaryGpuManager);
             _primaryGpuManager = primaryGpuManager;
 
 
