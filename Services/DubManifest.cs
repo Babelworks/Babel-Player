@@ -38,7 +38,7 @@ internal static class DubManifest
 
     internal static string Write(string outputDir, DubExportManifest manifest)
     {
-        string path = BuildPath(outputDir, Path.GetFileNameWithoutExtension(manifest.MediaFile));
+        string path = BuildPath(outputDir, Path.GetFileName(Path.GetFileNameWithoutExtension(manifest.MediaFile)));
         JsonStorePersistence.AtomicWriteText(path, Serialize(manifest));
         return path;
     }
