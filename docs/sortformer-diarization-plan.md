@@ -57,3 +57,7 @@ dotnet test BabelPlayer.Tests/BabelPlayer.Tests.csproj -c Release
 - Flipping the default away from WeSpeaker
 - Deleting WeSpeaker
 - TensorRT / CUDA / 8-speaker variants
+
+## Follow-ups
+
+- **Bounded feature streaming:** `SortFormerDiarizationEngine.RunStreamingFeatureModel` currently extracts mel features for the entire decoded recording (NeMo-style) before chunked ONNX steps. That matches the TrackDub/NeMo offline-feature + streaming-encoder pattern, but long media can spike heap while samples and full feature buffers are both live. A later hardening pass should stream or window feature extraction so peak memory stays bounded, without changing the AOSC/spkcache/fifo contract.
