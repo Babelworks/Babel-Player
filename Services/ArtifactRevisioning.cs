@@ -34,8 +34,16 @@ internal static class ArtifactRevisioning
             if (File.Exists(candidate) || Directory.Exists(candidate))
                 continue;
 
-            File.Move(finalPath, candidate);
-            return candidate;
+            try
+            {
+                File.Move(finalPath, candidate);
+                return candidate;
+            }
+            catch (IOException) when (File.Exists(candidate))
+            {
+            }
         }
+
+        return null;
     }
 }
