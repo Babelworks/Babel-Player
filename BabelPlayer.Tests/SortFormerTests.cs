@@ -26,7 +26,7 @@ public sealed class SortFormerTests : IDisposable
     [InlineData("clip.mkv", ProviderNames.SortFormerLocal, true)]
     [InlineData("talk.mp3", ProviderNames.SortFormerLocal, true)]
     [InlineData("talk.m4a", ProviderNames.SortFormerLocal, true)]
-    [InlineData("talk.wav", ProviderNames.SortFormerLocal, false)]
+    [InlineData("talk.wav", ProviderNames.SortFormerLocal, true)]
     [InlineData("talk.mp3", ProviderNames.WeSpeakerLocal, false)]
     [InlineData("talk.wav", ProviderNames.WeSpeakerLocal, false)]
     public void RequiresPcmWavExtractForDiarization_MatchesProviderNeeds(
@@ -37,6 +37,17 @@ public sealed class SortFormerTests : IDisposable
         Assert.Equal(
             expected,
             SessionWorkflowCoordinator.RequiresPcmWavExtractForDiarization(path, provider));
+    }
+
+    [Fact]
+    public void ModelDownloader_IsSortFormerModelDownloaded_ReturnsFalseWhenShaReadFails()
+    {
+        var root = Path.Combine(_dir, "missing-hash-target");
+        Directory.CreateDirectory(Path.Combine(root, "onnx"));
+        // File exists for RequiredFiles check but is empty / unreadable for SHA.
+        File.WriteAllBytes(Path.Combine(root, "onnx", "model.onnx"), []);
+
+        Assert.False(ModelDownloader.IsSortFormerModelDownloaded(root));
     }
 
     [Fact]

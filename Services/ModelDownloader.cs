@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Babel.Player.Models;
@@ -526,15 +527,22 @@ except Exception as e:
         if (!Directory.Exists(resolvedDir))
             return false;
 
-        foreach (var relativePath in SortFormerModelCatalog.RequiredFiles)
+        try
         {
-            var info = new FileInfo(Path.Combine(resolvedDir, relativePath));
-            if (!info.Exists || info.Length == 0)
-                return false;
-        }
+            foreach (var relativePath in SortFormerModelCatalog.RequiredFiles)
+            {
+                var info = new FileInfo(Path.Combine(resolvedDir, relativePath));
+                if (!info.Exists || info.Length == 0)
+                    return false;
+            }
 
-        var modelPath = Path.Combine(resolvedDir, SortFormerModelCatalog.RelativeModelPath);
-        return SortFormerModelFiles.TryVerifySha256(modelPath, out _);
+            var modelPath = Path.Combine(resolvedDir, SortFormerModelCatalog.RelativeModelPath);
+            return SortFormerModelFiles.TryVerifySha256(modelPath, out _);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            return false;
+        }
     }
 
     public async Task<bool> DownloadSortFormerModelAsync(

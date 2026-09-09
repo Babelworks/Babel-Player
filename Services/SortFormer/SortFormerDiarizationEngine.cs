@@ -155,7 +155,12 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 keepModelFrameCount,
                 StreamingEmbeddingDimension);
 
-            state.Update(chunkEmbeddings, keepModelFrameCount, validModelFrameCount);
+            state.Update(
+                chunkEmbeddings,
+                keepModelFrameCount,
+                chunkPredictions,
+                speakerCount,
+                validModelFrameCount);
         }
 
         int frameCount = predictionData.Count / speakerCount;
@@ -431,24 +436,6 @@ public sealed class SortFormerDiarizationEngine : IDisposable
         return sliced;
     }
 
-    private static float[] AppendAndKeepLastFrames(
-        float[] existing,
-        int existingFrameCount,
-        float[] appended,
-        int appendedFrameCount,
-        int featureCount,
-        int maxFrameCount)
-    {
-        float[] combined = ConcatenateFrames(existing, existingFrameCount, appended, appendedFrameCount, featureCount);
-        int combinedFrameCount = existingFrameCount + appendedFrameCount;
-        if (combinedFrameCount <= maxFrameCount)
-        {
-            return combined;
-        }
-
-        return SliceFrames(combined, combinedFrameCount - maxFrameCount, maxFrameCount, featureCount);
-    }
-
     private static Tensor<float> ResolveProbabilityTensor(IDisposableReadOnlyCollection<DisposableNamedOnnxValue> outputs)
     {
         foreach (DisposableNamedOnnxValue output in outputs)
@@ -655,19 +642,34 @@ public sealed class SortFormerDiarizationEngine : IDisposable
 
     private sealed class SortFormerStreamingState
     {
+        private const float PredScoreThreshold = 0.25f;
+        private const float SilenceThreshold = 0.2f;
+        private const float ScoresBoostLatest = 0.05f;
+        private const float StrongBoostRate = 0.75f;
+        private const float WeakBoostRate = 1.5f;
+        private const float MinPosScoresRate = 0.5f;
+        private const int SilenceFramesPerSpeaker = 3;
+        private const int MaxIndexPlaceholder = 99999;
+
         public float[] SpeakerCacheEmbeddings { get; private set; } = [];
-
+        public float[]? SpeakerCachePredictions { get; private set; }
         public int SpeakerCacheFrameCount { get; private set; }
-
         public float[] FifoEmbeddings { get; private set; } = [];
-
+        public float[] FifoPredictions { get; private set; } = [];
         public int FifoFrameCount { get; private set; }
+        public float[] MeanSilenceEmbedding { get; private set; } = new float[StreamingEmbeddingDimension];
+        public int SilenceFrameCount { get; private set; }
 
         public void Update(
             float[] chunkEmbeddings,
             int chunkEmbeddingFrameCount,
+            float[] chunkPredictions,
+            int speakerCount,
             int validChunkFrameCount)
         {
+            if (chunkEmbeddingFrameCount <= 0 || speakerCount <= 0)
+                return;
+
             int previousFifoFrameCount = FifoFrameCount;
             float[] combinedFifoEmbeddings = ConcatenateFrames(
                 FifoEmbeddings,
@@ -675,11 +677,18 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 chunkEmbeddings,
                 chunkEmbeddingFrameCount,
                 StreamingEmbeddingDimension);
+            float[] combinedFifoPredictions = ConcatenateFrames(
+                FifoPredictions,
+                FifoFrameCount,
+                chunkPredictions,
+                chunkEmbeddingFrameCount,
+                speakerCount);
             int combinedFifoFrameCount = previousFifoFrameCount + chunkEmbeddingFrameCount;
 
             if (combinedFifoFrameCount <= StreamingFifoFrames)
             {
                 FifoEmbeddings = combinedFifoEmbeddings;
+                FifoPredictions = combinedFifoPredictions;
                 FifoFrameCount = combinedFifoFrameCount;
                 return;
             }
@@ -694,17 +703,63 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 0,
                 popOutFrameCount,
                 StreamingEmbeddingDimension);
+            float[] popOutPredictions = SliceFrames(
+                combinedFifoPredictions,
+                0,
+                popOutFrameCount,
+                speakerCount);
 
-            SpeakerCacheEmbeddings = AppendAndKeepLastFrames(
+            UpdateSilenceProfile(popOutEmbeddings, popOutPredictions, popOutFrameCount, speakerCount);
+
+            float[] combinedCacheEmbeddings = ConcatenateFrames(
                 SpeakerCacheEmbeddings,
                 SpeakerCacheFrameCount,
                 popOutEmbeddings,
                 popOutFrameCount,
-                StreamingEmbeddingDimension,
-                StreamingSpeakerCacheFrames);
-            SpeakerCacheFrameCount = Math.Min(
-                StreamingSpeakerCacheFrames,
-                SpeakerCacheFrameCount + popOutFrameCount);
+                StreamingEmbeddingDimension);
+            int combinedCacheFrameCount = SpeakerCacheFrameCount + popOutFrameCount;
+
+            float[]? combinedCachePredictions = null;
+            if (SpeakerCachePredictions is not null)
+            {
+                combinedCachePredictions = ConcatenateFrames(
+                    SpeakerCachePredictions,
+                    SpeakerCacheFrameCount,
+                    popOutPredictions,
+                    popOutFrameCount,
+                    speakerCount);
+            }
+            else if (combinedCacheFrameCount > StreamingSpeakerCacheFrames)
+            {
+                // First compression: recover cache preds from prior cache region of the
+                // current step's full prediction tensor is unavailable here, so seed with
+                // zeros for historical cache frames and attach pop-out preds (NeMo path
+                // uses preds[:, :spkcache_len] when available; zeros remain inactive).
+                combinedCachePredictions = new float[combinedCacheFrameCount * speakerCount];
+                Array.Copy(
+                    popOutPredictions,
+                    0,
+                    combinedCachePredictions,
+                    SpeakerCacheFrameCount * speakerCount,
+                    popOutFrameCount * speakerCount);
+            }
+
+            if (combinedCacheFrameCount > StreamingSpeakerCacheFrames && combinedCachePredictions is not null)
+            {
+                (SpeakerCacheEmbeddings, SpeakerCachePredictions) = CompressSpeakerCache(
+                    combinedCacheEmbeddings,
+                    combinedCachePredictions,
+                    combinedCacheFrameCount,
+                    speakerCount,
+                    MeanSilenceEmbedding);
+                SpeakerCacheFrameCount = StreamingSpeakerCacheFrames;
+            }
+            else
+            {
+                SpeakerCacheEmbeddings = combinedCacheEmbeddings;
+                SpeakerCachePredictions = combinedCachePredictions;
+                SpeakerCacheFrameCount = combinedCacheFrameCount;
+            }
 
             int remainingFifoFrameCount = combinedFifoFrameCount - popOutFrameCount;
             FifoEmbeddings = SliceFrames(
@@ -712,7 +767,286 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 popOutFrameCount,
                 remainingFifoFrameCount,
                 StreamingEmbeddingDimension);
+            FifoPredictions = SliceFrames(
+                combinedFifoPredictions,
+                popOutFrameCount,
+                remainingFifoFrameCount,
+                speakerCount);
             FifoFrameCount = remainingFifoFrameCount;
+        }
+
+        private void UpdateSilenceProfile(
+            float[] embeddings,
+            float[] predictions,
+            int frameCount,
+            int speakerCount)
+        {
+            if (frameCount <= 0)
+                return;
+
+            var sum = new float[StreamingEmbeddingDimension];
+            int newSilenceFrames = 0;
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                float activity = 0f;
+                int predOffset = frame * speakerCount;
+                for (int speaker = 0; speaker < speakerCount; speaker++)
+                    activity += predictions[predOffset + speaker];
+
+                if (activity >= SilenceThreshold)
+                    continue;
+
+                int embOffset = frame * StreamingEmbeddingDimension;
+                for (int dim = 0; dim < StreamingEmbeddingDimension; dim++)
+                    sum[dim] += embeddings[embOffset + dim];
+                newSilenceFrames++;
+            }
+
+            if (newSilenceFrames == 0)
+                return;
+
+            int total = SilenceFrameCount + newSilenceFrames;
+            for (int dim = 0; dim < StreamingEmbeddingDimension; dim++)
+            {
+                float previous = MeanSilenceEmbedding[dim] * SilenceFrameCount;
+                MeanSilenceEmbedding[dim] = (previous + sum[dim]) / Math.Max(1, total);
+            }
+
+            SilenceFrameCount = total;
+        }
+
+        private static (float[] Embeddings, float[] Predictions) CompressSpeakerCache(
+            float[] embSeq,
+            float[] preds,
+            int frameCount,
+            int speakerCount,
+            float[] meanSilenceEmbedding)
+        {
+            int spkcacheLenPerSpk = StreamingSpeakerCacheFrames / speakerCount - SilenceFramesPerSpeaker;
+            int strongBoostPerSpk = (int)Math.Floor(spkcacheLenPerSpk * StrongBoostRate);
+            int weakBoostPerSpk = (int)Math.Floor(spkcacheLenPerSpk * WeakBoostRate);
+            int minPosScoresPerSpk = (int)Math.Floor(spkcacheLenPerSpk * MinPosScoresRate);
+
+            float[] scores = GetLogPredScores(preds, frameCount, speakerCount);
+            DisableLowScores(preds, scores, frameCount, speakerCount, minPosScoresPerSpk);
+
+            // Boost newly appended frames (beyond previous cache capacity).
+            for (int frame = StreamingSpeakerCacheFrames; frame < frameCount; frame++)
+            {
+                int offset = frame * speakerCount;
+                for (int speaker = 0; speaker < speakerCount; speaker++)
+                {
+                    if (!float.IsNegativeInfinity(scores[offset + speaker]))
+                        scores[offset + speaker] += ScoresBoostLatest;
+                }
+            }
+
+            BoostTopKScores(scores, frameCount, speakerCount, strongBoostPerSpk, scaleFactor: 2f);
+            BoostTopKScores(scores, frameCount, speakerCount, weakBoostPerSpk, scaleFactor: 1f);
+
+            int scoredFrameCount = frameCount;
+            if (SilenceFramesPerSpeaker > 0)
+            {
+                scoredFrameCount = frameCount + SilenceFramesPerSpeaker;
+                var padded = new float[scoredFrameCount * speakerCount];
+                Array.Copy(scores, padded, frameCount * speakerCount);
+                for (int frame = frameCount; frame < scoredFrameCount; frame++)
+                {
+                    int offset = frame * speakerCount;
+                    for (int speaker = 0; speaker < speakerCount; speaker++)
+                        padded[offset + speaker] = float.PositiveInfinity;
+                }
+
+                scores = padded;
+            }
+
+            (int[] topkIndices, bool[] isDisabled) = GetTopKIndices(scores, scoredFrameCount, speakerCount, frameCount);
+            return GatherSpeakerCache(
+                embSeq,
+                preds,
+                frameCount,
+                speakerCount,
+                topkIndices,
+                isDisabled,
+                meanSilenceEmbedding);
+        }
+
+        private static float[] GetLogPredScores(float[] preds, int frameCount, int speakerCount)
+        {
+            var scores = new float[frameCount * speakerCount];
+            var logP = new float[speakerCount];
+            var log1P = new float[speakerCount];
+            float logHalf = MathF.Log(0.5f);
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                int offset = frame * speakerCount;
+                float log1Sum = 0f;
+                for (int speaker = 0; speaker < speakerCount; speaker++)
+                {
+                    float p = preds[offset + speaker];
+                    logP[speaker] = MathF.Log(Math.Clamp(p, PredScoreThreshold, 1f));
+                    log1P[speaker] = MathF.Log(Math.Clamp(1f - p, PredScoreThreshold, 1f));
+                    log1Sum += log1P[speaker];
+                }
+
+                for (int speaker = 0; speaker < speakerCount; speaker++)
+                    scores[offset + speaker] = logP[speaker] - log1P[speaker] + log1Sum - logHalf;
+            }
+
+            return scores;
+        }
+
+        private static void DisableLowScores(
+            float[] preds,
+            float[] scores,
+            int frameCount,
+            int speakerCount,
+            int minPosScoresPerSpk)
+        {
+            var positiveCounts = new int[speakerCount];
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                int offset = frame * speakerCount;
+                for (int speaker = 0; speaker < speakerCount; speaker++)
+                {
+                    if (preds[offset + speaker] <= 0.5f)
+                    {
+                        scores[offset + speaker] = float.NegativeInfinity;
+                        continue;
+                    }
+
+                    if (scores[offset + speaker] > 0f)
+                        positiveCounts[speaker]++;
+                }
+            }
+
+            for (int frame = 0; frame < frameCount; frame++)
+            {
+                int offset = frame * speakerCount;
+                for (int speaker = 0; speaker < speakerCount; speaker++)
+                {
+                    if (preds[offset + speaker] <= 0.5f)
+                        continue;
+                    if (scores[offset + speaker] > 0f)
+                        continue;
+                    if (positiveCounts[speaker] >= minPosScoresPerSpk)
+                        scores[offset + speaker] = float.NegativeInfinity;
+                }
+            }
+        }
+
+        private static void BoostTopKScores(
+            float[] scores,
+            int frameCount,
+            int speakerCount,
+            int nBoostPerSpk,
+            float scaleFactor)
+        {
+            if (nBoostPerSpk <= 0 || frameCount <= 0)
+                return;
+
+            int take = Math.Min(nBoostPerSpk, frameCount);
+            float delta = -scaleFactor * MathF.Log(0.5f);
+            var frameScores = new float[frameCount];
+            var indices = new int[frameCount];
+
+            for (int speaker = 0; speaker < speakerCount; speaker++)
+            {
+                for (int frame = 0; frame < frameCount; frame++)
+                {
+                    frameScores[frame] = scores[frame * speakerCount + speaker];
+                    indices[frame] = frame;
+                }
+
+                Array.Sort(frameScores, indices);
+                for (int rank = 0; rank < take; rank++)
+                {
+                    int frame = indices[frameCount - 1 - rank];
+                    float current = scores[frame * speakerCount + speaker];
+                    if (!float.IsNegativeInfinity(current))
+                        scores[frame * speakerCount + speaker] = current + delta;
+                }
+            }
+        }
+
+        private static (int[] Indices, bool[] Disabled) GetTopKIndices(
+            float[] scores,
+            int scoredFrameCount,
+            int speakerCount,
+            int nFramesNoSil)
+        {
+            int flatCount = scoredFrameCount * speakerCount;
+            var flatScores = new float[flatCount];
+            var flatIndices = new int[flatCount];
+            for (int speaker = 0; speaker < speakerCount; speaker++)
+            {
+                for (int frame = 0; frame < scoredFrameCount; frame++)
+                {
+                    int flat = speaker * scoredFrameCount + frame;
+                    flatScores[flat] = scores[frame * speakerCount + speaker];
+                    flatIndices[flat] = flat;
+                }
+            }
+
+            Array.Sort(flatScores, flatIndices);
+            var selected = new int[StreamingSpeakerCacheFrames];
+            for (int i = 0; i < StreamingSpeakerCacheFrames; i++)
+            {
+                int source = flatCount - 1 - i;
+                if (source < 0 || float.IsNegativeInfinity(flatScores[source]))
+                    selected[i] = MaxIndexPlaceholder;
+                else
+                    selected[i] = flatIndices[source];
+            }
+
+            Array.Sort(selected);
+            var disabled = new bool[StreamingSpeakerCacheFrames];
+            for (int i = 0; i < StreamingSpeakerCacheFrames; i++)
+            {
+                if (selected[i] == MaxIndexPlaceholder)
+                {
+                    disabled[i] = true;
+                    selected[i] = 0;
+                    continue;
+                }
+
+                int frame = selected[i] % scoredFrameCount;
+                disabled[i] = frame >= nFramesNoSil;
+                selected[i] = frame % Math.Max(1, nFramesNoSil);
+                if (disabled[i])
+                    selected[i] = 0;
+            }
+
+            return (selected, disabled);
+        }
+
+        private static (float[] Embeddings, float[] Predictions) GatherSpeakerCache(
+            float[] embSeq,
+            float[] preds,
+            int frameCount,
+            int speakerCount,
+            int[] topkIndices,
+            bool[] isDisabled,
+            float[] meanSilenceEmbedding)
+        {
+            var embeddings = new float[StreamingSpeakerCacheFrames * StreamingEmbeddingDimension];
+            var predictions = new float[StreamingSpeakerCacheFrames * speakerCount];
+            for (int i = 0; i < StreamingSpeakerCacheFrames; i++)
+            {
+                int frame = Math.Clamp(topkIndices[i], 0, Math.Max(0, frameCount - 1));
+                int destEmb = i * StreamingEmbeddingDimension;
+                int destPred = i * speakerCount;
+                if (isDisabled[i] || frameCount <= 0)
+                {
+                    Array.Copy(meanSilenceEmbedding, 0, embeddings, destEmb, StreamingEmbeddingDimension);
+                    continue;
+                }
+
+                Array.Copy(embSeq, frame * StreamingEmbeddingDimension, embeddings, destEmb, StreamingEmbeddingDimension);
+                Array.Copy(preds, frame * speakerCount, predictions, destPred, speakerCount);
+            }
+
+            return (embeddings, predictions);
         }
     }
 
