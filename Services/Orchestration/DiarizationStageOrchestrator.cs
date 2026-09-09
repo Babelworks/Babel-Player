@@ -52,12 +52,12 @@ internal sealed class DiarizationStageOrchestrator
                     _session.CurrentSession.TranscriptPath,
                     cancellationToken,
                     resultingStage: SessionWorkflowStage.Diarized,
-                    statusMessage: "Speaker mapping ready. Review speakers, then continue.")
+                    statusMessage: LocalizationService.Instance["Status_ReviewSpeakersThenContinue"])
                 .ConfigureAwait(false);
 
             PipelineStageReporter.ReportStage(
                 stageContext,
-                $"Speaker mapping complete. Identified {outcome.SpeakerCount} speakers across {outcome.SegmentCount} segments. Review speakers, then continue.",
+                $"Speaker mapping complete. Identified {outcome.SpeakerCount} speakers across {outcome.SegmentCount} segments.",
                 progress01: 1,
                 isIndeterminate: false);
             stageSucceeded = true;

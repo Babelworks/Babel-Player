@@ -32,6 +32,9 @@ public sealed class SortFormerDiarizationEngine : IDisposable
     private const int StreamingChunkStrideFeatureFrames = StreamingChunkModelFrames * StreamingFeatureSubsampling;
     private const int StreamingFeedFeatureFrames =
         (StreamingChunkModelFrames + StreamingRightContextModelFrames) * StreamingFeatureSubsampling;
+    // NeMo SortFormer emits fixed 80 ms model frames; do not stretch padded streaming frames
+    // across the true audio duration or every turn boundary shifts early.
+    private const double ModelFrameDurationSeconds = 0.08d;
 
     private static readonly SortFormerFeatureExtractor FeatureExtractor = new();
     private readonly InferenceSession _session;
@@ -527,8 +530,8 @@ public sealed class SortFormerDiarizationEngine : IDisposable
                 $"exceeding the maximum supported count of {MaxSupportedSpeakers} (frameCount={frameCount}).");
         }
 
-        double secondsPerFrame = durationSeconds / frameCount;
-        if (!double.IsFinite(secondsPerFrame) || secondsPerFrame <= 0d)
+        const double secondsPerFrame = ModelFrameDurationSeconds;
+        if (!double.IsFinite(durationSeconds) || durationSeconds <= 0d)
         {
             return [];
         }
