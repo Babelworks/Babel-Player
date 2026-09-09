@@ -373,7 +373,7 @@ public static class DubTui
 foreach (var line in File.ReadLines(logPath).TakeLast(40))
     Console.WriteLine(line);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
             Console.Error.WriteLine($"[tui] Could not read log: {ex.Message}");
         }
