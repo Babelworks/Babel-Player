@@ -600,7 +600,14 @@ public void ResetJournal()
         if (_processorTask is not null)
             await _processorTask.ConfigureAwait(false);
 
-        ArtifactRevisioning.BackupExisting(finalPath);
+        try
+        {
+            ArtifactRevisioning.BackupExisting(finalPath);
+        }
+        catch
+        {
+            // Backup failure should not prevent final artifact write
+        }
         await ArtifactPersistence.AtomicWriteTextAsync(
                 finalPath,
                 ArtifactJson.SerializeTranslation(snapshot),
