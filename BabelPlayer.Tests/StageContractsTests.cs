@@ -257,6 +257,19 @@ public sealed class StageContractsTests
         Assert.Equal("speaker_001", request.SpeakerId);
         Assert.Equal("reference.wav", request.ReferenceAudioPath);
         Assert.Equal("This is a reference", request.ReferenceTranscriptText);
+        Assert.Null(request.TargetDurationSeconds);
+        Assert.Null(request.SourceStartSeconds);
+        Assert.Null(request.SourceEndSeconds);
+
+        var timed = request with
+        {
+            TargetDurationSeconds = 8.2,
+            SourceStartSeconds = 0,
+            SourceEndSeconds = 8.2,
+        };
+        Assert.Equal(8.2, timed.TargetDurationSeconds);
+        Assert.Equal(0, timed.SourceStartSeconds);
+        Assert.Equal(8.2, timed.SourceEndSeconds);
     }
 
     // ?? TtsResult ??????????????????????????????????????????????????????????????

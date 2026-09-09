@@ -198,6 +198,7 @@ public sealed class SettingsService
         public string? Theme { get; set; }
         public int? MaxRecentSessions { get; set; }
         public bool? AutoSaveEnabled { get; set; }
+        public bool? StoreProjectsNextToMedia { get; set; }
 
         /// <summary>
         /// Produce an <see cref="AppSettings"/> populated from this file representation, applying legacy migrations and normalization.
@@ -296,6 +297,7 @@ public sealed class SettingsService
             settings.Theme = Theme ?? settings.Theme;
             settings.MaxRecentSessions = MaxRecentSessions ?? settings.MaxRecentSessions;
             settings.AutoSaveEnabled = AutoSaveEnabled ?? settings.AutoSaveEnabled;
+            settings.StoreProjectsNextToMedia = StoreProjectsNextToMedia ?? settings.StoreProjectsNextToMedia;
 
             return settings;
         }
@@ -354,6 +356,7 @@ public sealed class SettingsService
             Theme = settings.Theme,
             MaxRecentSessions = settings.MaxRecentSessions,
             AutoSaveEnabled = settings.AutoSaveEnabled,
+            StoreProjectsNextToMedia = settings.StoreProjectsNextToMedia,
         };
 
         private ComputeProfile ResolveProfile(

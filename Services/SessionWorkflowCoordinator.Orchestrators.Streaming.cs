@@ -170,6 +170,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                 ttsSnapshot,
                 translationChannel.Reader,
                 ttsResultChannel.Writer,
+                ttsStageContext,
                 pipelineToken);
             var translationTask = RunStreamingTranslationStageAsync(
                 translationSnapshot,
@@ -197,6 +198,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                     streamRequest,
                     forwardingWriter,
                     pipelineToken).ConfigureAwait(false);
+                forwardingWriter.TryComplete();
 
                 await transcriptArtifactWriter.CompleteAsync(transcriptionResult, transcriptPath, pipelineToken).ConfigureAwait(false);
                 await _c.CommitTranscriptionSessionStateAsync(transcriptionResult, transcriptPath).ConfigureAwait(false);
@@ -392,6 +394,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                 ttsSnapshot,
                 translationChannel.Reader,
                 ttsResultChannel.Writer,
+                ttsStageContext,
                 pipelineToken);
             var translationTask = RunStreamingTranslationStageAsync(
                 translationSnapshot,
@@ -565,6 +568,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
             TtsExecutionSnapshot snapshot,
             ChannelReader<TranslationChannelItem> translationReader,
             ChannelWriter<TtsChannelItem> resultWriter,
+            PipelineStageContext? stageContext,
             CancellationToken cancellationToken)
         {
             var parallelism = snapshot.MaxConcurrency;
@@ -584,6 +588,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                                 snapshot,
                                 item,
                                 resultWriter,
+                                stageContext,
                                 cancellationToken).ConfigureAwait(false);
                         }
                         finally
@@ -668,6 +673,7 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
             TtsExecutionSnapshot snapshot,
             TranslationChannelItem item,
             ChannelWriter<TtsChannelItem> resultWriter,
+            PipelineStageContext? stageContext,
             CancellationToken cancellationToken)
         {
             var id = item.SegmentId;
@@ -678,6 +684,9 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
             var segmentAudioPath = Path.Combine(snapshot.SegmentsDir, $"{id}.mp3");
             var resolvedVoice = snapshot.ResolveVoiceForSegment(item.Segment);
             var referenceAudioPath = snapshot.ResolveReferenceAudioForSegment(item.Segment);
+            var targetDurationSeconds = Math.Max(0, item.Segment.End - item.Segment.Start);
+            _c.Log.Info(
+                $"Generating TTS for segment {id} (voice={resolvedVoice}, speaker={item.Segment.SpeakerId ?? "<none>"}): {text[..Math.Min(30, text.Length)]}...");
 
             TtsResult result;
             try
@@ -691,10 +700,20 @@ internal StreamingPipelineOrchestrator(SessionWorkflowCoordinator coordinator) =
                         item.Segment.SpeakerId,
                         referenceAudioPath,
                         Language: snapshot.Language,
-                        SourceVideoPath: snapshot.SourceVideoPath),
+                        SourceVideoPath: snapshot.SourceVideoPath,
+                        TargetDurationSeconds: targetDurationSeconds,
+                        SourceStartSeconds: item.Segment.Start,
+                        SourceEndSeconds: item.Segment.End),
                     cancellationToken);
                 _c.TrackPendingTtsTask(task);
-                result = await task.ConfigureAwait(false);
+                result = await _c.AwaitWithTtsHeartbeatAsync(
+                    task,
+                    stageContext,
+                    elapsed => $"Generating dub audio for {id} ({FormatTtsHeartbeatElapsed(elapsed)})…",
+                    progressFactory: null,
+                    isIndeterminate: true,
+                    cancellationToken,
+                    _ => "First Chatterbox load on CPU can take several minutes.").ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

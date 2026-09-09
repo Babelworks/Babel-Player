@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,17 +17,30 @@ public sealed class TtsReferenceExtractor : IAsyncDisposable
     private string? _tempWavPath;
     private bool _disposed;
 
+    public const double DefaultDurationSeconds = 10.0d;
+    public const double MaxDurationSeconds = 10.0d;
+
     public TtsReferenceExtractor(AppLog log)
     {
         _log = log;
     }
 
     /// <summary>
-    /// Extracts the first 30 seconds (or less if file is shorter) of audio from a video file.
-    /// Returns the path to the extracted 16kHz mono WAV file.
-    /// The caller is responsible for cleaning up the returned file, or calling DisposeAsync on this instance.
+    /// Extracts a speech sample from a source video for TTS voice cloning.
+    /// Uses the speaker's actual language (the source), not the dub target language.
+    /// Returns the path to a 16kHz mono WAV file.
     /// </summary>
-    public async Task<string> ExtractReferenceAsync(string videoPath, CancellationToken ct = default)
+    public Task<string> ExtractReferenceAsync(string videoPath, CancellationToken ct = default) =>
+        ExtractReferenceAsync(videoPath, startSeconds: 0, durationSeconds: DefaultDurationSeconds, ct);
+
+    /// <summary>
+    /// Extracts <paramref name="durationSeconds"/> of audio starting at <paramref name="startSeconds"/>.
+    /// </summary>
+    public async Task<string> ExtractReferenceAsync(
+        string videoPath,
+        double startSeconds,
+        double durationSeconds,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(videoPath))
             throw new ArgumentException("Video path cannot be empty", nameof(videoPath));
@@ -44,7 +58,11 @@ public sealed class TtsReferenceExtractor : IAsyncDisposable
             Path.GetTempPath(),
             $"babel_tts_ref_{Guid.NewGuid():N}.wav");
 
+        var clampedStart = Math.Max(0d, startSeconds);
+        var clampedDuration = Math.Clamp(durationSeconds, 1.0d, MaxDurationSeconds);
+
         _log.Debug($"[TtsReferenceExtractor] Extracting reference audio from: {videoPath}");
+        _log.Debug($"[TtsReferenceExtractor] Window: {clampedStart:0.###}s for {clampedDuration:0.###}s");
         _log.Debug($"[TtsReferenceExtractor] Output path: {tempPath}");
 
         var psi = new ProcessStartInfo
@@ -56,12 +74,14 @@ public sealed class TtsReferenceExtractor : IAsyncDisposable
             CreateNoWindow = true,
         };
 
-        // Extract first 30 seconds, 16kHz mono WAV (TTS requirement)
+        // Extract source-language speech (the speaker's actual language), 16kHz mono WAV.
         psi.ArgumentList.Add("-y");
         psi.ArgumentList.Add("-i");
         psi.ArgumentList.Add(videoPath);
+        psi.ArgumentList.Add("-ss");
+        psi.ArgumentList.Add(clampedStart.ToString("0.###", CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("-t");
-        psi.ArgumentList.Add("30");
+        psi.ArgumentList.Add(clampedDuration.ToString("0.###", CultureInfo.InvariantCulture));
         psi.ArgumentList.Add("-ar");
         psi.ArgumentList.Add("16000");
         psi.ArgumentList.Add("-ac");

@@ -12,10 +12,12 @@ namespace Babel.Player.Services.Chatterbox;
 internal sealed class ChatterboxTokenizer
 {
     private readonly BpeTokenizer _tokenizer;
+    private readonly SpecialTokenScanner _specials;
 
-    private ChatterboxTokenizer(BpeTokenizer tokenizer)
+    private ChatterboxTokenizer(BpeTokenizer tokenizer, SpecialTokenScanner specials)
     {
         _tokenizer = tokenizer;
+        _specials = specials;
     }
 
     public static async Task<ChatterboxTokenizer> LoadAsync(string tokenizerPath, CancellationToken cancellationToken = default)
@@ -47,28 +49,52 @@ internal sealed class ChatterboxTokenizer
             }
         }
 
+        var specialTokens = ReadSpecialTokens(root);
         var options = new BpeOptions(vocabulary)
         {
             Merges = merges,
-            SpecialTokens = ReadSpecialTokens(root),
+            SpecialTokens = specialTokens,
             UnknownToken = "[UNK]",
-            ByteLevel = true,
+            ByteLevel = false,
         };
-        return new ChatterboxTokenizer(BpeTokenizer.Create(options));
+        return new ChatterboxTokenizer(BpeTokenizer.Create(options), new SpecialTokenScanner(specialTokens));
     }
 
     public long[] Encode(string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        // Apply Unicode normalization (NFC) to ensure consistent character representation
-        // before tokenization, matching the preprocessing used during model training.
-        // This is particularly important for multilingual text with accents, diacritics,
-        // and non-ASCII characters.
-        var normalized = text.Trim().Normalize(System.Text.NormalizationForm.FormC);
-        return _tokenizer
-            .EncodeToIds(normalized, false, false)
-            .Select(static tokenId => (long)tokenId)
-            .ToArray();
+        // Grapheme tokenizer: NFC, then spaces become the dedicated [SPACE] token, matching
+        // onnx-community/chatterbox-multilingual-ONNX tokenizer.json (Replace " " -> "[SPACE]").
+        var normalized = text.Trim()
+            .Normalize(System.Text.NormalizationForm.FormC)
+            .Replace(" ", "[SPACE]", StringComparison.Ordinal);
+        return EncodeGraphemes(normalized);
+    }
+
+    private long[] EncodeGraphemes(string text)
+    {
+        var ids = new List<long>();
+        int index = 0;
+        while (index < text.Length)
+        {
+            if (_specials.TryMatch(text, index, out int specialId, out int specialLength))
+            {
+                ids.Add(specialId);
+                index += specialLength;
+                continue;
+            }
+
+            int nextSpecial = _specials.FindNext(text, index + 1);
+            if (nextSpecial < 0)
+                nextSpecial = text.Length;
+
+            var piece = text[index..nextSpecial];
+            ids.AddRange(_tokenizer.EncodeToIds(piece, considerPreTokenization: false, considerNormalization: false)
+                .Select(static tokenId => (long)tokenId));
+            index = nextSpecial;
+        }
+
+        return ids.ToArray();
     }
 
     private static Dictionary<string, int> ReadSpecialTokens(JsonElement root)
@@ -96,5 +122,52 @@ internal sealed class ChatterboxTokenizer
         }
 
         return tokens;
+    }
+
+    private sealed class SpecialTokenScanner
+    {
+        private readonly (string Token, int Id)[] _tokensByLength;
+
+        public SpecialTokenScanner(IReadOnlyDictionary<string, int> specialTokens)
+        {
+            _tokensByLength = specialTokens
+                .Select(pair => (pair.Key, pair.Value))
+                .OrderByDescending(pair => pair.Key.Length)
+                .ToArray();
+        }
+
+        public bool TryMatch(string text, int index, out int id, out int length)
+        {
+            foreach (var (token, tokenId) in _tokensByLength)
+            {
+                if (token.Length > 0 &&
+                    index + token.Length <= text.Length &&
+                    text.AsSpan(index, token.Length).SequenceEqual(token.AsSpan()))
+                {
+                    id = tokenId;
+                    length = token.Length;
+                    return true;
+                }
+            }
+
+            id = 0;
+            length = 0;
+            return false;
+        }
+
+        public int FindNext(string text, int start)
+        {
+            int best = -1;
+            foreach (var (token, _) in _tokensByLength)
+            {
+                if (token.Length == 0)
+                    continue;
+                int found = text.IndexOf(token, start, StringComparison.Ordinal);
+                if (found >= 0 && (best < 0 || found < best))
+                    best = found;
+            }
+
+            return best;
+        }
     }
 }

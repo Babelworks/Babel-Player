@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Babel.Player.Models;
 using Babel.Player.Services;
@@ -80,10 +81,16 @@ public sealed class ChatterboxTests : IDisposable
     [Fact]
     public void ResolveMaxNewTokens_DefaultsAndBudgets()
     {
-        Assert.Equal(256, ChatterboxTtsEngine.ResolveMaxNewTokens(null));
-        Assert.Equal(256, ChatterboxTtsEngine.ResolveMaxNewTokens(0));
+        Assert.Equal(1000, ChatterboxTtsEngine.ResolveMaxNewTokens(null));
+        Assert.Equal(1000, ChatterboxTtsEngine.ResolveMaxNewTokens(0));
         var budgeted = ChatterboxTtsEngine.ResolveMaxNewTokens(4.0);
-        Assert.InRange(budgeted, 128, 256);
+        Assert.InRange(budgeted, 128, 1000);
+    }
+
+    [Fact]
+    public void ResolveOnnxIntraOpNumThreads_UsesAtLeastOneCore()
+    {
+        Assert.InRange(ChatterboxTtsEngine.ResolveOnnxIntraOpNumThreads(), 1, int.MaxValue);
     }
 
     [Fact]
@@ -190,6 +197,87 @@ public sealed class ChatterboxTests : IDisposable
     }
 
     [Fact]
+    public void NormalizePromptText_CleansPunctuationAndAddsStop()
+    {
+        Assert.Equal("You need to add some text for me to talk.", ChatterboxSampling.NormalizePromptText("  "));
+        Assert.Equal("Hello world.", ChatterboxSampling.NormalizePromptText("hello world"));
+        Assert.Equal("Hello, world.", ChatterboxSampling.NormalizePromptText("Hello: world"));
+        Assert.Equal("Already done.", ChatterboxSampling.NormalizePromptText("Already done."));
+    }
+
+    [Fact]
+    public void ApplyCfg_BlendsConditionalAndUnconditionalLogits()
+    {
+        float[] destination = new float[2];
+        ChatterboxSampling.ApplyCfg([1f, 2f], [0f, 1f], 0.5f, destination);
+        Assert.Equal(1.5f, destination[0], precision: 5);
+        Assert.Equal(2.5f, destination[1], precision: 5);
+    }
+
+    [Fact]
+    public void SampleNextToken_StopsAfterRepeatedPhonemes()
+    {
+        var generated = Enumerable.Repeat(42L, ChatterboxSampling.ConsecutiveRepeatLimit).ToArray();
+        long token = ChatterboxSampling.SampleNextToken(
+            [0.1f, 0.2f, 0.3f],
+            [],
+            generated,
+            stopSpeechToken: 6562,
+            randomValue: 0.1d);
+        Assert.Equal(6562, token);
+    }
+
+    [Fact]
+    public void SampleNextToken_ArgMaxWhenTemperatureIsZero()
+    {
+        long token = ChatterboxSampling.SampleNextToken(
+            [0.1f, 5f, 0.2f],
+            [0.1f, 0.1f, 0.1f],
+            [6561L],
+            stopSpeechToken: 6562,
+            randomValue: 0.0d,
+            temperature: 0f);
+        Assert.Equal(1, token);
+    }
+
+    [Fact]
+    public void CopyLastLogits_ReadsLastStepPerBatch()
+    {
+        // [batch=2, seq=2, vocab=3]
+        float[] values =
+        [
+            1f, 2f, 3f,
+            4f, 5f, 6f,
+            7f, 8f, 9f,
+            10f, 11f, 12f,
+        ];
+        float[] cond = new float[3];
+        float[] uncond = new float[3];
+        ChatterboxSampling.CopyLastLogits(values, [2, 2, 3], 0, cond);
+        ChatterboxSampling.CopyLastLogits(values, [2, 2, 3], 1, uncond);
+        Assert.Equal(new float[] { 4f, 5f, 6f }, cond);
+        Assert.Equal(new float[] { 10f, 11f, 12f }, uncond);
+    }
+
+    [Fact]
+    public void TruncateReferenceAudio_KeepsAtMostTenSeconds()
+    {
+        var samples = new float[24000 * 15];
+        samples[0] = 0.5f;
+        var truncated = ChatterboxAudio.TruncateReferenceAudio(samples, 24000);
+        Assert.Equal(24000 * 10, truncated.Length);
+        Assert.Equal(0.5f, truncated[0]);
+    }
+
+    [Fact]
+    public void CountTrailingRepeats_CountsRunAtEnd()
+    {
+        Assert.Equal(3, ChatterboxSampling.CountTrailingRepeats([1, 2, 9, 9, 9]));
+        Assert.Equal(1, ChatterboxSampling.CountTrailingRepeats([7]));
+        Assert.Equal(0, ChatterboxSampling.CountTrailingRepeats([]));
+    }
+
+    [Fact]
     public void ModelFiles_DetectsMultilingualFromTokenizerContent()
     {
         var multiRoot = Path.Combine(_dir, "neutral-model-name");
@@ -199,6 +287,41 @@ public sealed class ChatterboxTests : IDisposable
         var singleRoot = Path.Combine(_dir, "other-neutral-name");
         WriteFakeModel(singleRoot, withLanguageToken: false);
         Assert.False(ChatterboxModelFiles.Resolve(singleRoot).IsMultilingual);
+    }
+
+    [Fact]
+    public async Task Encode_UsesGraphemeSpaceAndLanguageTokens()
+    {
+        var root = Path.Combine(_dir, "grapheme-tokenizer");
+        WriteGraphemeTokenizer(root);
+        var tokenizer = await ChatterboxTokenizer.LoadAsync(Path.Combine(root, "tokenizer.json"));
+
+        var ids = tokenizer.Encode("[en]a b");
+
+        Assert.Equal(new long[] { 6, 3, 2, 4 }, ids);
+    }
+
+    [Fact]
+    public async Task Encode_MatchesOfficialMultilingualIdsWhenModelIsInstalled()
+    {
+        var path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "BabelPlayer",
+            "models",
+            "chatterbox-multilingual",
+            "tokenizer.json");
+        if (!File.Exists(path))
+            return;
+
+        var tokenizer = await ChatterboxTokenizer.LoadAsync(path);
+        var ids = tokenizer.Encode("[en]Today we're going to do an audio understanding exercise.");
+        Assert.Equal(
+            new long[]
+            {
+                708, 296, 207, 88, 2, 100, 4, 46, 2, 119, 52, 2, 51, 2, 134, 2, 43, 2,
+                14, 34, 17, 22, 28, 2, 97, 234, 63, 53, 52, 2, 169, 44, 16, 54, 18, 9,
+            },
+            ids);
     }
 
     private static void WriteFakeModel(string root, bool withLanguageToken)
@@ -211,6 +334,34 @@ public sealed class ChatterboxTests : IDisposable
         File.WriteAllText(
             Path.Combine(root, "tokenizer.json"),
             "{\"model\":{\"vocab\":{" + vocabEntry + "\"hello\": 200},\"merges\":[]}}");
+    }
+
+    private static void WriteGraphemeTokenizer(string root)
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(
+            Path.Combine(root, "tokenizer.json"),
+            """
+            {
+              "added_tokens": [
+                {"id": 0, "content": "[STOP]", "special": true},
+                {"id": 1, "content": "[UNK]", "special": true},
+                {"id": 2, "content": "[SPACE]", "special": true},
+                {"id": 6, "content": "[en]", "special": false}
+              ],
+              "model": {
+                "vocab": {
+                  "[STOP]": 0,
+                  "[UNK]": 1,
+                  "[SPACE]": 2,
+                  "[en]": 6,
+                  "a": 3,
+                  "b": 4
+                },
+                "merges": []
+              }
+            }
+            """);
     }
 
     private static byte[] BuildWavBytes(int channels, int frames, bool extraChunk = false)

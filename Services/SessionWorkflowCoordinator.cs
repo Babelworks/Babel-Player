@@ -452,7 +452,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
                     $"cleared={string.Join(",", validation.ClearedArtifacts)}; provenance={SessionSnapshotSemantics.DescribeSessionProvenance(validated)}");
             }
 
-            var sessionDir = _sessionSwitchService.GetSessionDirectory(validated.SessionId);
+            var sessionDir = ResolveSessionDirectory(validated.SessionId, sourceMediaPath);
             var mediaDir = Path.Combine(sessionDir, "media");
             Directory.CreateDirectory(mediaDir);
             var ingestedPath = Path.Combine(mediaDir, Path.GetFileName(sourceMediaPath));
@@ -490,7 +490,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
             // session is promoted rather than orphaned.
             var newSessionId = switchingMedia ? Guid.NewGuid() : CurrentSession.SessionId;
 
-            var sessionDir = _sessionSwitchService.GetSessionDirectory(newSessionId);
+            var sessionDir = ResolveSessionDirectory(newSessionId, sourceMediaPath);
             var mediaDir = Path.Combine(sessionDir, "media");
             Directory.CreateDirectory(mediaDir);
             var ingestedPath = Path.Combine(mediaDir, Path.GetFileName(sourceMediaPath));
@@ -839,7 +839,10 @@ internal static string MediaKey(string path) => Path.GetFullPath(path);
                 targetSegment?.SpeakerId,
                 referenceAudioPath,
                 Language: snapshot.Language,
-                SourceVideoPath: snapshot.SourceVideoPath),
+                SourceVideoPath: snapshot.SourceVideoPath,
+                TargetDurationSeconds: targetSegment is null ? null : Math.Max(0, targetSegment.End - targetSegment.Start),
+                SourceStartSeconds: targetSegment?.Start,
+                SourceEndSeconds: targetSegment?.End),
             cancellationToken);
         TrackPendingTtsTask(ttsTask);
         var result = await ttsTask;
@@ -1102,7 +1105,32 @@ internal static string MediaKey(string path) => Path.GetFullPath(path);
     private string GetSessionDirectory() => SessionDirectoryFor(CurrentSession.SessionId);
 
     private string SessionDirectoryFor(Guid sessionId) =>
-        _sessionSwitchService.GetSessionDirectory(sessionId);
+        ResolveSessionDirectory(sessionId, CurrentSession.SourceMediaPath);
+
+    private string ResolveSessionDirectory(Guid sessionId, string? sourceMediaPath)
+    {
+        var appLocalDir = _sessionSwitchService.GetSessionDirectory(sessionId);
+        if (!CurrentSettings.StoreProjectsNextToMedia)
+            return appLocalDir;
+
+        var resolved = ProjectFolder.ResolveSessionDirectory(
+            _perSessionStore.SessionsRoot,
+            sessionId,
+            sourceMediaPath,
+            useProjectFolders: true);
+
+        if (ProjectFolder.TryGetDefaultDirectory(sourceMediaPath) is { } projectDir)
+        {
+            var intended = Path.Combine(projectDir, "sessions", sessionId.ToString());
+            if (!string.Equals(resolved, intended, StringComparison.OrdinalIgnoreCase))
+            {
+                _log.Warning(
+                    $"Project folder is not writable ({projectDir}). Using app-local session storage.");
+            }
+        }
+
+        return resolved;
+    }
 
     /// <summary>
     /// Restores a previously-opened session by ID, stashing the current one first.

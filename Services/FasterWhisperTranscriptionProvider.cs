@@ -415,6 +415,7 @@ _emit({{
         }
         finally
         {
+            writer.TryComplete();
             if (!string.IsNullOrWhiteSpace(extractedAudioPath) && File.Exists(extractedAudioPath))
             {
                 File.Delete(extractedAudioPath);

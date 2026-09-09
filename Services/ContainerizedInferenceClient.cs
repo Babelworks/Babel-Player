@@ -312,6 +312,10 @@ public sealed class ContainerizedInferenceClient : IDisposable
             _log.Error($"Streaming transcription failed: {ex.Message}", ex);
             return new TranscriptionResult(false, [], language ?? "unknown", 0.0, ex.Message);
         }
+        finally
+        {
+            writer.TryComplete();
+        }
     }
 
     /// <summary>
