@@ -201,6 +201,7 @@ internal sealed class TranscriptArtifactStreamingWriter
         if (_processorTask is not null)
             await _processorTask.ConfigureAwait(false);
 
+        ArtifactRevisioning.BackupExisting(finalPath);
         await ArtifactPersistence.AtomicWriteTextAsync(
                 finalPath,
                 ArtifactJson.SerializeTranscript(snapshot),
@@ -599,6 +600,7 @@ public void ResetJournal()
         if (_processorTask is not null)
             await _processorTask.ConfigureAwait(false);
 
+        ArtifactRevisioning.BackupExisting(finalPath);
         await ArtifactPersistence.AtomicWriteTextAsync(
                 finalPath,
                 ArtifactJson.SerializeTranslation(snapshot),
