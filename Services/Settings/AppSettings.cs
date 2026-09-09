@@ -300,6 +300,12 @@ public sealed class AppSettings
     /// </summary>
     public double AmbianceMixDb { get; set; } = -15.0;
 
+    /// <summary>
+    /// When true, headless dub renders keep the intermediate timeline and mix files
+    /// next to the delivery set instead of deleting them after export. Debug aid only.
+    /// </summary>
+    public bool KeepRenderArtifacts { get; set; } = false;
+
     /// <summary>UI theme: "Light", "Dark", or "System".</summary>
     public string Theme { get; set; } = "System";
 
