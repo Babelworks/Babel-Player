@@ -19,8 +19,6 @@ public sealed class ChatterboxTtsProvider : ITtsProvider, IDisposable, IAsyncDis
     private readonly bool _ownsExtractor;
     private readonly Lock _gate = new();
     private ChatterboxTtsEngine? _engine;
-    private string? _autoExtractedReferencePath;
-    private string? _autoExtractedReferenceSourcePath;
     private int _disposed;
 
     public ChatterboxTtsProvider(AppLog log, string modelDir, bool consentGranted, TtsReferenceExtractor? extractor = null)
@@ -53,7 +51,10 @@ public sealed class ChatterboxTtsProvider : ITtsProvider, IDisposable, IAsyncDis
                 SpeakerId: segment.SpeakerId,
                 ReferenceAudioPath: ResolveReferenceAudioPath(request, segment.SpeakerId),
                 Language: request.Language,
-                SourceVideoPath: request.SourceVideoPath),
+                SourceVideoPath: request.SourceVideoPath,
+                TargetDurationSeconds: Math.Max(0, segment.End - segment.Start),
+                SourceStartSeconds: segment.Start,
+                SourceEndSeconds: segment.End),
             generateSegmentAsync: GenerateSegmentTtsAsync,
             cancellationToken: cancellationToken);
     }
@@ -72,27 +73,37 @@ public sealed class ChatterboxTtsProvider : ITtsProvider, IDisposable, IAsyncDis
                 "Chatterbox voice cloning requires explicit consent. Grant it in Settings (Chatterbox voice cloning) or pass --consent-clone for headless runs.");
         }
 
+        string? extractedReferencePath = null;
         if (string.IsNullOrWhiteSpace(request.ReferenceAudioPath) || !File.Exists(request.ReferenceAudioPath))
         {
-            var resolved = await EnsureAutoExtractedReferenceAsync(request.SourceVideoPath, cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(resolved))
+            extractedReferencePath = await EnsureSourceLanguageReferenceAsync(request, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(extractedReferencePath))
             {
                 throw new InvalidOperationException(
-                    "Chatterbox voice cloning requires a speaker reference audio clip. Assign one per speaker in the Speaker Reference Wizard.");
+                    "Chatterbox voice cloning requires source audio to clone from. Load media first, or assign a speaker clip in the Speaker Reference Wizard.");
             }
 
-            request = request with { ReferenceAudioPath = resolved };
+            request = request with { ReferenceAudioPath = extractedReferencePath };
         }
 
-        _log.Debug($"Starting Chatterbox segment TTS ({request.SpeakerId ?? "clone"}): {request.Text[..Math.Min(30, request.Text.Length)]}... -> {request.OutputAudioPath}");
+        _log.Info($"Starting Chatterbox segment TTS ({request.SpeakerId ?? "clone"}): {request.Text[..Math.Min(30, request.Text.Length)]}... -> {request.OutputAudioPath}");
 
-        var engine = GetOrCreateEngine();
-        var wavBytes = await engine.SynthesizeAsync(
-            request.Text,
-            request.Language ?? "en",
-            request.ReferenceAudioPath,
-            targetDurationSeconds: null,
-            cancellationToken).ConfigureAwait(false);
+        byte[] wavBytes;
+        try
+        {
+            var engine = GetOrCreateEngine();
+            wavBytes = await engine.SynthesizeAsync(
+                request.Text,
+                request.Language ?? "en",
+                request.ReferenceAudioPath,
+                targetDurationSeconds: request.TargetDurationSeconds,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (extractedReferencePath is not null)
+                await _extractor.DeleteAsync(extractedReferencePath).ConfigureAwait(false);
+        }
 
         var outputDir = Path.GetDirectoryName(request.OutputAudioPath);
         if (!string.IsNullOrWhiteSpace(outputDir))
@@ -180,21 +191,25 @@ public sealed class ChatterboxTtsProvider : ITtsProvider, IDisposable, IAsyncDis
         }
     }
 
-    private async Task<string?> EnsureAutoExtractedReferenceAsync(string? sourceVideoPath, CancellationToken cancellationToken)
+    private async Task<string?> EnsureSourceLanguageReferenceAsync(
+        SingleSegmentTtsRequest request,
+        CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_autoExtractedReferencePath) &&
-            string.Equals(_autoExtractedReferenceSourcePath, sourceVideoPath, StringComparison.OrdinalIgnoreCase))
-        {
-            return _autoExtractedReferencePath;
-        }
-
-        if (string.IsNullOrWhiteSpace(sourceVideoPath) || !File.Exists(sourceVideoPath))
+        if (string.IsNullOrWhiteSpace(request.SourceVideoPath) || !File.Exists(request.SourceVideoPath))
             return null;
 
-        _log.Debug($"Chatterbox auto-extracting reference audio from: {sourceVideoPath}");
-        _autoExtractedReferencePath = await _extractor.ExtractReferenceAsync(sourceVideoPath, cancellationToken).ConfigureAwait(false);
-        _autoExtractedReferenceSourcePath = sourceVideoPath;
-        return _autoExtractedReferencePath;
+        double start = Math.Max(0d, request.SourceStartSeconds ?? 0d);
+        double duration = request.SourceEndSeconds is double end && end > start
+            ? Math.Min(TtsReferenceExtractor.MaxDurationSeconds, Math.Max(end - start, 3d))
+            : TtsReferenceExtractor.DefaultDurationSeconds;
+
+        _log.Info(
+            $"Chatterbox cloning from source-language audio at {start:0.##}s ({duration:0.##}s window).");
+        return await _extractor.ExtractReferenceAsync(
+            request.SourceVideoPath,
+            start,
+            duration,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private void ThrowIfDisposed()

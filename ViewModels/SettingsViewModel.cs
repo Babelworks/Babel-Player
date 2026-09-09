@@ -96,6 +96,7 @@ public sealed partial class SettingsViewModel : ViewModelBase, IDisposable
             ?? AppLanguageOptions[0];
         MaxRecentSessions      = current.MaxRecentSessions;
         AutoSaveEnabled        = current.AutoSaveEnabled;
+        StoreProjectsNextToMedia = current.StoreProjectsNextToMedia;
         ShowPipelinePane       = current.IsPipelinePaneVisible;
         ShowSegmentsPane       = current.IsSegmentsPaneVisible;
         SwapPaneSides          = current.SwapPaneSides;
@@ -450,6 +451,9 @@ public sealed partial class SettingsViewModel : ViewModelBase, IDisposable
     private bool _autoSaveEnabled;
 
     [ObservableProperty]
+    private bool _storeProjectsNextToMedia;
+
+    [ObservableProperty]
     private bool _showPipelinePane;
 
     [ObservableProperty]
@@ -776,6 +780,7 @@ public sealed partial class SettingsViewModel : ViewModelBase, IDisposable
         _languageChangeCommitted = true;
         settings.MaxRecentSessions  = MaxRecentSessions;
         settings.AutoSaveEnabled    = AutoSaveEnabled;
+        settings.StoreProjectsNextToMedia = StoreProjectsNextToMedia;
         settings.IsPipelinePaneVisible = ShowPipelinePane;
         settings.IsSegmentsPaneVisible = ShowSegmentsPane;
         settings.SwapPaneSides     = SwapPaneSides;

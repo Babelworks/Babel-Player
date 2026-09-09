@@ -58,7 +58,25 @@ internal static class ChatterboxAudio
             samples = padded;
         }
 
-        return samples;
+        // Single truncation point. Callers must not truncate again.
+        return TruncateReferenceAudio(samples, targetSampleRate);
+    }
+
+    internal static float[] TruncateReferenceAudio(
+        float[] samples,
+        int sampleRate,
+        double maxSeconds = 10.0d)
+    {
+        if (samples.Length == 0 || sampleRate <= 0 || maxSeconds <= 0)
+            return samples;
+
+        int maxSamples = Math.Max(MinimumSpeechEncoderSamples, (int)Math.Round(sampleRate * maxSeconds));
+        if (samples.Length <= maxSamples)
+            return samples;
+
+        var truncated = new float[maxSamples];
+        Array.Copy(samples, truncated, maxSamples);
+        return truncated;
     }
 
     internal static (float[] Samples, int SampleRate) DecodePcm16Mono(byte[] wavBytes)

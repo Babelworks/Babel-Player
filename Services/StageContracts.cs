@@ -85,7 +85,10 @@ public sealed record SingleSegmentTtsRequest(
     string? ReferenceAudioPath = null,
     string? ReferenceTranscriptText = null,
     string? Language = null,
-    string? SourceVideoPath = null);
+    string? SourceVideoPath = null,
+    double? TargetDurationSeconds = null,
+    double? SourceStartSeconds = null,
+    double? SourceEndSeconds = null);
 
 public sealed record QwenBatchSegmentRequest(
     string SegmentId,

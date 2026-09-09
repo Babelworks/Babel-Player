@@ -256,4 +256,63 @@ public sealed class PerSessionSnapshotStoreTests : IDisposable
         Assert.False(File.Exists(Path.Combine(corruptDir, "snapshot.json")));
         Assert.Single(FindCorruptBackups(corruptDir));
     }
+
+    [Fact]
+    public void Save_WithExtraSessionDirectory_WritesBothCopies()
+    {
+        var snapshot = WorkflowSessionSnapshot.CreateNew(DateTimeOffset.UtcNow);
+        var extraDir = Path.Combine(_dir, "project", "sessions", snapshot.SessionId.ToString());
+
+        _store.Save(snapshot, extraDir);
+
+        Assert.True(File.Exists(Path.Combine(_sessionsRoot, snapshot.SessionId.ToString(), "snapshot.json")));
+        Assert.True(File.Exists(Path.Combine(extraDir, "snapshot.json")));
+    }
+
+    [Fact]
+    public void Save_WithSameExtraSessionDirectory_DoesNotFail()
+    {
+        var snapshot = WorkflowSessionSnapshot.CreateNew(DateTimeOffset.UtcNow);
+        var sameDir = Path.Combine(_sessionsRoot, snapshot.SessionId.ToString());
+
+        _store.Save(snapshot, sameDir);
+
+        Assert.True(File.Exists(Path.Combine(sameDir, "snapshot.json")));
+    }
+
+    [Fact]
+    public void TryLoadLatestForSourceMedia_ReturnsNewestMatchingSnapshot()
+    {
+        var media = Path.Combine(_dir, "clip.mp4");
+        var older = WorkflowSessionSnapshot.CreateNew(DateTimeOffset.UtcNow.AddHours(-1)) with
+        {
+            SourceMediaPath = media,
+            LastUpdatedAtUtc = DateTimeOffset.UtcNow.AddHours(-1),
+        };
+        var newer = WorkflowSessionSnapshot.CreateNew(DateTimeOffset.UtcNow) with
+        {
+            SourceMediaPath = media,
+            LastUpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        var other = WorkflowSessionSnapshot.CreateNew(DateTimeOffset.UtcNow) with
+        {
+            SourceMediaPath = Path.Combine(_dir, "other.mp4"),
+            LastUpdatedAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+        };
+
+        _store.Save(older);
+        _store.Save(newer);
+        _store.Save(other);
+
+        var loaded = _store.TryLoadLatestForSourceMedia(media);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(newer.SessionId, loaded.SessionId);
+    }
+
+    [Fact]
+    public void TryLoadLatestForSourceMedia_MissingMedia_ReturnsNull()
+    {
+        Assert.Null(_store.TryLoadLatestForSourceMedia(Path.Combine(_dir, "missing.mp4")));
+    }
 }

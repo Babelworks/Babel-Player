@@ -100,7 +100,7 @@ public sealed class ContainerizedTranscriptionProvider : ITranscriptionProvider,
         _log.Debug($"[ContainerizedTranscription] Streaming transcription: {request.SourceAudioPath} " +
                   $"(model={request.ModelName}, cpu_compute={cpuCompute}, cpu_threads={cpuThreads}, cpu_workers={cpuWorkers})");
 
-        return await _client.TranscribeStreamingAsync(
+        var result = await _client.TranscribeStreamingAsync(
             request.SourceAudioPath,
             writer,
             request.ModelName,
@@ -109,6 +109,12 @@ public sealed class ContainerizedTranscriptionProvider : ITranscriptionProvider,
             request.CpuThreads,
             request.NumWorkers,
             cancellationToken).ConfigureAwait(false);
+
+        if (!result.Success)
+            throw new InvalidOperationException(
+                $"Containerized transcription failed: {result.ErrorMessage}");
+
+        return result;
     }
 
     public ProviderReadiness CheckReadiness(AppSettings settings, ApiKeyStore? keyStore = null) =>

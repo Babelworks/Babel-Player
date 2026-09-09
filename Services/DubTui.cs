@@ -335,7 +335,7 @@ public static class DubTui
         }
         else
         {
-            outDir = PromptText("Output directory (empty = alongside media)", string.Empty).Trim().Trim('"');
+            outDir = PromptText("Output directory (empty = project folder next to media)", string.Empty).Trim().Trim('"');
             if (!string.IsNullOrWhiteSpace(outDir) && !IsValidOutDir(outDir))
             {
                 Console.Error.WriteLine("[tui] Invalid output directory.");

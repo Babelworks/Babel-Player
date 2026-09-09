@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security;
@@ -40,56 +41,12 @@ public static class DubCli
         string[] args,
         CancellationToken cancellationToken = default)
     {
-        if (args.Any(a => string.Equals(a, "--help", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(a, "-h", StringComparison.OrdinalIgnoreCase)))
-        {
-            PrintUsage();
-            return ExitSuccess;
-        }
+        var parse = ParseArguments(args);
+        if (parse.Options is null)
+            return parse.ExitCode;
 
-        string? media = BenchmarkCli.GetArg(args, "--media");
-        string? lang = BenchmarkCli.GetArg(args, "--lang");
-        string? outDir = BenchmarkCli.GetArg(args, "--out");
-        string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
-        string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
-        string? projectDir = BenchmarkCli.GetArg(args, "--project-dir");
-        bool noDiarization = HasFlag(args, "--no-diarization");
-        bool noMp4 = HasFlag(args, "--no-mp4");
-        bool consentClone = HasFlag(args, "--consent-clone");
-        bool keepRenders = HasFlag(args, "--keep-renders");
-
-        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
-        var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
-        if (unknown.Length > 0)
-        {
-            Console.Error.WriteLine($"[dub] Unknown flag(s): {string.Join(", ", unknown)}");
-            PrintUsage();
-            return ExitArgumentError;
-        }
-
-        if (media is null)
-        {
-            Console.Error.WriteLine("[dub] --media <path> is required.");
-            PrintUsage();
-            return ExitArgumentError;
-        }
-
-        if (!File.Exists(media))
-        {
-            Console.Error.WriteLine($"[dub] Media file not found: {media}");
-            return ExitArgumentError;
-        }
-
-        if (projectDir is not null && !IsValidProjectDir(projectDir))
-        {
-            Console.Error.WriteLine($"[dub] Invalid project directory: {projectDir}");
-            return ExitArgumentError;
-        }
-
-        media = Path.GetFullPath(media);
-        string outputDir = string.IsNullOrWhiteSpace(outDir)
-            ? Path.GetDirectoryName(media) ?? Environment.CurrentDirectory
-            : Path.GetFullPath(outDir);
+        var options = parse.Options;
+        var media = options.Media;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -104,20 +61,9 @@ public static class DubCli
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var startedUtc = DateTimeOffset.UtcNow;
 
-        Console.WriteLine();
-        Console.WriteLine("┌──────────────────────────────────────┐");
-        Console.WriteLine("│  Babel Player Dub CLI                 │");
-        Console.WriteLine("├──────────────────────────────────────┤");
-        Console.WriteLine($"│  media    : {Trim(media),-25} │");
-        Console.WriteLine($"│  output   : {Trim(outputDir),-25} │");
-        Console.WriteLine("└──────────────────────────────────────┘");
-        Console.WriteLine();
-
         SessionWorkflowCoordinator? coordinator = null;
         try
         {
-            Directory.CreateDirectory(outputDir);
-
             cancelHandler = (_, e) =>
             {
                 e.Cancel = true;
@@ -128,28 +74,15 @@ public static class DubCli
                 Path.Combine(appDataRoot, "settings", "app-settings.json"), log);
             var settings = settingsService.LoadOrDefault();
 
-            if (!string.IsNullOrWhiteSpace(lang))
-                settings.TargetLanguage = lang.Trim().ToLowerInvariant();
-            if (noDiarization)
-                settings.DiarizationProvider = string.Empty;
-            if (!string.IsNullOrWhiteSpace(ttsOverride))
-            {
-                settings.TtsProvider = ttsOverride.Trim().ToLowerInvariant();
-                settings.TtsProfile = InferenceRuntimeCatalog.InferTtsProfile(settings.TtsProvider);
-            }
-            if (!string.IsNullOrWhiteSpace(voiceOverride))
-                settings.TtsVoice = voiceOverride.Trim();
+            var projectDir = ResolveProjectDirectory(media, options.ProjectDir, settings);
+            string outputDir = string.IsNullOrWhiteSpace(options.OutDir)
+                ? projectDir ?? Path.GetDirectoryName(media) ?? Environment.CurrentDirectory
+                : Path.GetFullPath(options.OutDir);
 
-            if (consentClone)
-                settings.ChatterboxVoiceCloneConsent = true;
-            if (keepRenders)
-                settings.KeepRenderArtifacts = true;
-
-            Console.WriteLine($"[dub] transcription : {settings.TranscriptionProvider} ({settings.TranscriptionModel})");
-            Console.WriteLine($"[dub] translation  : {settings.TranslationProvider} -> {settings.TargetLanguage}");
-            Console.WriteLine($"[dub] tts          : {settings.TtsProvider}");
-            Console.WriteLine($"[dub] diarization  : {(string.IsNullOrEmpty(settings.DiarizationProvider) ? "off" : settings.DiarizationProvider)}");
-            Console.WriteLine();
+            WriteStartupBanner(media, outputDir);
+            Directory.CreateDirectory(outputDir);
+            ApplyCliSettingsOverrides(settings, options);
+            WriteProviderSummary(settings);
 
             var sessionsRoot = ResolveSessionsRoot(appDataRoot, projectDir);
             Console.WriteLine($"[dub] sessions    : {sessionsRoot}");
@@ -179,7 +112,8 @@ public static class DubCli
 
             coordinator = DependencyLocator.CreateSessionCoordinator(
                 log, settings, perSessionStore, recentStore, apiKeyStore, transportManager,
-                ResolveStateRoot(appDataRoot, projectDir), log, out _);
+                ResolveStateRoot(appDataRoot, projectDir), log, out _,
+                projectDirectory: projectDir);
 
             Console.WriteLine("[dub] loading media…");
             coordinator.LoadMedia(media);
@@ -187,7 +121,7 @@ public static class DubCli
             var timings = new DubRunTimings();
             timings.Mark("load-media", stopwatch.Elapsed);
 
-            if ((!string.IsNullOrWhiteSpace(ttsOverride) || !string.IsNullOrWhiteSpace(voiceOverride)) &&
+            if ((!string.IsNullOrWhiteSpace(options.TtsOverride) || !string.IsNullOrWhiteSpace(options.VoiceOverride)) &&
                 coordinator.CurrentSession.Stage >= SessionWorkflowStage.Translated)
             {
                 Console.WriteLine("[dub] re-running TTS under the requested provider.");
@@ -222,51 +156,10 @@ public static class DubCli
             Console.WriteLine($"[dub] wrote {mp3Path}");
             timings.Mark("dub-audio", stopwatch.Elapsed);
 
-            var exitCode = ExitSuccess;
-            string? writtenMp4Path = null;
+            var (exitCode, writtenMp4Path) = await TryWriteMp4Async(
+                coordinator, segments, outputDir, stem, render, options.NoMp4, cts.Token).ConfigureAwait(false);
 
-            if (!noMp4)
-            {
-                var mp4Path = Path.Combine(outputDir, $"{stem}-dub.mp4");
-                var session = coordinator.CurrentSession;
-                var encoder = HardwareEncoderHelper.ResolveEncoder(coordinator.CurrentSettings, coordinator.HardwareSnapshot);
-                var planner = new VideoExportPlanner();
-                var options = new ExportVideoOptions(
-                    mp4Path,
-                    IncludeTtsAudio: true,
-                    IncludeSoftCaptions: segments.Count > 0,
-                    BurnInCaptions: false,
-                    OverwriteExisting: true,
-                    Encoder: encoder,
-                    DubAudioPathOverride: render.MixedWithAmbiancePath ?? render.DubTimelinePath);
-
-                var validation = planner.Validate(session, segments, options);
-                if (!validation.CanExport)
-                {
-                    Console.Error.WriteLine($"[dub] MP4 export rejected: {string.Join(" ", validation.Issues)}");
-                    exitCode = ExitPipelineFailure;
-                }
-                else
-                {
-                    var plan = planner.BuildPlan(session, segments, options);
-                    await FfmpegVideoExportRunner.RunPlanAsync(plan, coordinator.Log, cts.Token).ConfigureAwait(false);
-                    Console.WriteLine($"[dub] wrote {mp4Path}");
-                    writtenMp4Path = mp4Path;
-                }
-            }
-
-            if (settings.KeepRenderArtifacts)
-            {
-                Console.WriteLine($"[dub] kept {render.DubTimelinePath}");
-                if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
-                    Console.WriteLine($"[dub] kept {render.MixedWithAmbiancePath}");
-            }
-            else
-            {
-                TryDeleteQuiet(render.DubTimelinePath);
-                if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
-                    TryDeleteQuiet(render.MixedWithAmbiancePath);
-            }
+            CleanupRenderArtifacts(render, settings.KeepRenderArtifacts);
             timings.Mark("video-export", stopwatch.Elapsed);
 
             WriteRunTimings(outputDir, stem, timings, startedUtc);
@@ -308,6 +201,186 @@ public static class DubCli
             {
             }
         }
+    }
+
+    private sealed record DubCliOptions(
+        string Media,
+        string? Lang,
+        string? OutDir,
+        string? TtsOverride,
+        string? VoiceOverride,
+        string? ProjectDir,
+        bool NoDiarization,
+        bool NoMp4,
+        bool ConsentClone,
+        bool KeepRenders);
+
+    private static (int ExitCode, DubCliOptions? Options) ParseArguments(string[] args)
+    {
+        if (args.Any(a => string.Equals(a, "--help", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(a, "-h", StringComparison.OrdinalIgnoreCase)))
+        {
+            PrintUsage();
+            return (ExitSuccess, null);
+        }
+
+        string? media = BenchmarkCli.GetArg(args, "--media");
+        string? lang = BenchmarkCli.GetArg(args, "--lang");
+        string? outDir = BenchmarkCli.GetArg(args, "--out");
+        string? ttsOverride = BenchmarkCli.GetArg(args, "--tts");
+        string? voiceOverride = BenchmarkCli.GetArg(args, "--voice");
+        string? projectDir = BenchmarkCli.GetArg(args, "--project-dir");
+        bool noDiarization = HasFlag(args, "--no-diarization");
+        bool noMp4 = HasFlag(args, "--no-mp4");
+        bool consentClone = HasFlag(args, "--consent-clone");
+        bool keepRenders = HasFlag(args, "--keep-renders");
+
+        var known = new[] { "--dub", "--media", "--lang", "--out", "--tts", "--voice", "--project-dir", "--no-diarization", "--no-mp4", "--consent-clone", "--keep-renders", "--help", "-h" };
+        var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
+        if (unknown.Length > 0)
+        {
+            Console.Error.WriteLine($"[dub] Unknown flag(s): {string.Join(", ", unknown)}");
+            PrintUsage();
+            return (ExitArgumentError, null);
+        }
+
+        if (media is null)
+        {
+            Console.Error.WriteLine("[dub] --media <path> is required.");
+            PrintUsage();
+            return (ExitArgumentError, null);
+        }
+
+        if (!File.Exists(media))
+        {
+            Console.Error.WriteLine($"[dub] Media file not found: {media}");
+            return (ExitArgumentError, null);
+        }
+
+        if (projectDir is not null && !IsValidProjectDir(projectDir))
+        {
+            Console.Error.WriteLine($"[dub] Invalid project directory: {projectDir}");
+            return (ExitArgumentError, null);
+        }
+
+        return (ExitSuccess, new DubCliOptions(
+            Path.GetFullPath(media),
+            lang,
+            outDir,
+            ttsOverride,
+            voiceOverride,
+            projectDir,
+            noDiarization,
+            noMp4,
+            consentClone,
+            keepRenders));
+    }
+
+    private static string? ResolveProjectDirectory(string media, string? projectDir, AppSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(projectDir) || !settings.StoreProjectsNextToMedia)
+            return projectDir;
+
+        var defaultProject = ProjectFolder.TryGetDefaultDirectory(media);
+        if (defaultProject is not null && ProjectFolder.TryEnsureWritableSessionsRoot(defaultProject))
+            return defaultProject;
+        if (defaultProject is not null)
+            Console.Error.WriteLine($"[dub] Project folder is not writable ({defaultProject}). Using app-local sessions.");
+        return projectDir;
+    }
+
+    private static void ApplyCliSettingsOverrides(AppSettings settings, DubCliOptions options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.Lang))
+            settings.TargetLanguage = options.Lang.Trim().ToLowerInvariant();
+        if (options.NoDiarization)
+            settings.DiarizationProvider = string.Empty;
+        if (!string.IsNullOrWhiteSpace(options.TtsOverride))
+        {
+            settings.TtsProvider = options.TtsOverride.Trim().ToLowerInvariant();
+            settings.TtsProfile = InferenceRuntimeCatalog.InferTtsProfile(settings.TtsProvider);
+        }
+        if (!string.IsNullOrWhiteSpace(options.VoiceOverride))
+            settings.TtsVoice = options.VoiceOverride.Trim();
+
+        if (options.ConsentClone)
+            settings.ChatterboxVoiceCloneConsent = true;
+        if (options.KeepRenders)
+            settings.KeepRenderArtifacts = true;
+    }
+
+    private static void WriteStartupBanner(string media, string outputDir)
+    {
+        Console.WriteLine();
+        Console.WriteLine("┌──────────────────────────────────────┐");
+        Console.WriteLine("│  Babel Player Dub CLI                 │");
+        Console.WriteLine("├──────────────────────────────────────┤");
+        Console.WriteLine($"│  media    : {Trim(media),-25} │");
+        Console.WriteLine($"│  output   : {Trim(outputDir),-25} │");
+        Console.WriteLine("└──────────────────────────────────────┘");
+        Console.WriteLine();
+    }
+
+    private static void WriteProviderSummary(AppSettings settings)
+    {
+        Console.WriteLine($"[dub] transcription : {settings.TranscriptionProvider} ({settings.TranscriptionModel})");
+        Console.WriteLine($"[dub] translation  : {settings.TranslationProvider} -> {settings.TargetLanguage}");
+        Console.WriteLine($"[dub] tts          : {settings.TtsProvider}");
+        Console.WriteLine($"[dub] diarization  : {(string.IsNullOrEmpty(settings.DiarizationProvider) ? "off" : settings.DiarizationProvider)}");
+        Console.WriteLine();
+    }
+
+    private static async Task<(int ExitCode, string? Mp4Path)> TryWriteMp4Async(
+        SessionWorkflowCoordinator coordinator,
+        List<WorkflowSegmentState> segments,
+        string outputDir,
+        string stem,
+        DubRenderResult render,
+        bool noMp4,
+        CancellationToken cancellationToken)
+    {
+        if (noMp4)
+            return (ExitSuccess, null);
+
+        var mp4Path = Path.Combine(outputDir, $"{stem}-dub.mp4");
+        var session = coordinator.CurrentSession;
+        var encoder = HardwareEncoderHelper.ResolveEncoder(coordinator.CurrentSettings, coordinator.HardwareSnapshot);
+        var planner = new VideoExportPlanner();
+        var exportOptions = new ExportVideoOptions(
+            mp4Path,
+            IncludeTtsAudio: true,
+            IncludeSoftCaptions: segments.Count > 0,
+            BurnInCaptions: false,
+            OverwriteExisting: true,
+            Encoder: encoder,
+            DubAudioPathOverride: render.MixedWithAmbiancePath ?? render.DubTimelinePath);
+
+        var validation = planner.Validate(session, segments, exportOptions);
+        if (!validation.CanExport)
+        {
+            Console.Error.WriteLine($"[dub] MP4 export rejected: {string.Join(" ", validation.Issues)}");
+            return (ExitPipelineFailure, null);
+        }
+
+        var plan = planner.BuildPlan(session, segments, exportOptions);
+        await FfmpegVideoExportRunner.RunPlanAsync(plan, coordinator.Log, cancellationToken).ConfigureAwait(false);
+        Console.WriteLine($"[dub] wrote {mp4Path}");
+        return (ExitSuccess, mp4Path);
+    }
+
+    private static void CleanupRenderArtifacts(DubRenderResult render, bool keepRenders)
+    {
+        if (keepRenders)
+        {
+            Console.WriteLine($"[dub] kept {render.DubTimelinePath}");
+            if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
+                Console.WriteLine($"[dub] kept {render.MixedWithAmbiancePath}");
+            return;
+        }
+
+        TryDeleteQuiet(render.DubTimelinePath);
+        if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
+            TryDeleteQuiet(render.MixedWithAmbiancePath);
     }
 
     private static void WriteRunTimings(
@@ -477,13 +550,13 @@ public static class DubCli
         Console.WriteLine("Options:");
         Console.WriteLine("  --media <path>          Source media file (required)");
         Console.WriteLine("  --lang <code>           Translation target language (default: settings)");
-        Console.WriteLine("  --out <dir>             Output directory (default: alongside media)");
+        Console.WriteLine("  --out <dir>             Output directory (default: {filename}.babel next to media)");
         Console.WriteLine("  --tts <provider>        TTS provider override (e.g. chatterbox)");
         Console.WriteLine("  --voice <id>            TTS voice/model override (default: settings)");
         Console.WriteLine("  --no-diarization        Skip diarization for this run");
         Console.WriteLine("  --no-mp4                Skip MP4 export (SRT + MP3 only)");
         Console.WriteLine("  --consent-clone         Grant voice-cloning consent for this run");
-        Console.WriteLine("  --project-dir <dir>     Portable session storage (default: app-local)");
+        Console.WriteLine("  --project-dir <dir>     Portable session storage (default: {filename}.babel next to media)");
         Console.WriteLine("  --keep-renders          Keep intermediate render files for debugging");
         Console.WriteLine("  --help, -h              Show this help");
         Console.WriteLine();

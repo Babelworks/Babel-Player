@@ -778,12 +778,14 @@ public partial class MainWindow : Window
         var suggestedName = string.IsNullOrWhiteSpace(sourceMediaPath)
             ? "babel-player-captions.srt"
             : $"{Path.GetFileNameWithoutExtension(sourceMediaPath)}.srt";
+        var startFolder = await TryGetProjectExportFolderAsync(vm).ConfigureAwait(true);
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export Captions",
             DefaultExtension = "srt",
             SuggestedFileName = suggestedName,
+            SuggestedStartLocation = startFolder,
             FileTypeChoices =
             [
                 new FilePickerFileType("SubRip Subtitle") { Patterns = SrtPattern },
@@ -847,12 +849,14 @@ public partial class MainWindow : Window
         var suggestedName = string.IsNullOrWhiteSpace(sourceMediaPath)
             ? "babel-dub.mp3"
             : $"{Path.GetFileNameWithoutExtension(sourceMediaPath)}-dub.mp3";
+        var startFolder = await TryGetProjectExportFolderAsync(vm).ConfigureAwait(true);
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export dubbed audio",
             DefaultExtension = "mp3",
             SuggestedFileName = suggestedName,
+            SuggestedStartLocation = startFolder,
             FileTypeChoices =
             [
                 new FilePickerFileType("MP3 audio") { Patterns = Mp3Patterns },
@@ -923,12 +927,14 @@ public partial class MainWindow : Window
         var suggestedName = string.IsNullOrWhiteSpace(sourceMediaPath)
             ? "babel-export.mp4"
             : $"{Path.GetFileNameWithoutExtension(sourceMediaPath)}-dub.mp4";
+        var startFolder = await TryGetProjectExportFolderAsync(vm).ConfigureAwait(true);
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export video with dubbed track",
             DefaultExtension = "mp4",
             SuggestedFileName = suggestedName,
+            SuggestedStartLocation = startFolder,
             FileTypeChoices =
             [
                 new FilePickerFileType("MP4 video") { Patterns = Mp4Patterns },
@@ -988,6 +994,22 @@ public partial class MainWindow : Window
             if (!string.Equals(render.MixedWithAmbiancePath, render.DubTimelinePath, StringComparison.OrdinalIgnoreCase))
                 TryDeleteQuiet(render.MixedWithAmbiancePath);
         }
+    }
+
+    private async Task<IStorageFolder?> TryGetProjectExportFolderAsync(MainWindowViewModel vm)
+    {
+        if (!vm.Coordinator.CurrentSettings.StoreProjectsNextToMedia)
+            return null;
+
+        var projectDir = ProjectFolder.TryGetDefaultDirectory(vm.Coordinator.CurrentSession.SourceMediaPath);
+        if (projectDir is null)
+            return null;
+
+        var writable = await Task.Run(() => ProjectFolder.TryEnsureWritable(projectDir)).ConfigureAwait(true);
+        if (!writable)
+            return null;
+
+        return await StorageProvider.TryGetFolderFromPathAsync(projectDir).ConfigureAwait(true);
     }
 
     private static void TryDeleteQuiet(string? path)
