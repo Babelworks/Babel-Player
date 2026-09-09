@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Babel.Player.Models;
+using Babel.Player.Resources;
 using Babel.Player.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -55,6 +56,18 @@ public sealed partial class EmbeddedPlaybackPipelineViewModel : ViewModelBase, I
 
     public bool CanRunPipeline => !_parent.IsBusy;
 
+    /// <summary>
+    /// True when multi-speaker mapping finished and the user should review speakers before continuing.
+    /// </summary>
+    public bool IsAwaitingSpeakerReview =>
+        _coordinator.CurrentSession.Stage == SessionWorkflowStage.Diarized
+        && !string.IsNullOrWhiteSpace(_coordinator.CurrentSettings.DiarizationProvider);
+
+    public string RunPipelineButtonLabel =>
+        IsAwaitingSpeakerReview
+            ? (Strings.ResourceManager.GetString("Button_ContinuePipeline") ?? "Continue")
+            : (Strings.ResourceManager.GetString("Button_RunPipeline") ?? "Run Pipeline");
+
     public bool CanRefreshTranscription =>
         !_parent.IsBusy &&
         !string.IsNullOrWhiteSpace(_coordinator.CurrentSession.IngestedMediaPath) &&
@@ -103,14 +116,17 @@ public sealed partial class EmbeddedPlaybackPipelineViewModel : ViewModelBase, I
         var cancellationToken = _pipelineCts.Token;
         ResetProgressState();
         var stageProgress = new Progress<SessionWorkflowCoordinator.PipelineStageUpdate>(ApplyStageUpdate);
+        var continuing = IsAwaitingSpeakerReview;
 
         try
         {
             _parent.IsBusy = true;
-            _parent.StatusText = "Running pipeline…";
+            _parent.StatusText = continuing
+                ? (Strings.ResourceManager.GetString("Status_ContinuingPipeline") ?? "Continuing pipeline…")
+                : (Strings.ResourceManager.GetString("Status_RunningPipeline") ?? "Running pipeline…");
             _parent.ClearStatusErrorDetail();
 
-            if (_coordinator.CurrentSession.Stage == SessionWorkflowStage.Diarized)
+            if (continuing)
             {
                 await _coordinator.ContinuePipelineAsync(
                     progress: null,
@@ -130,6 +146,7 @@ public sealed partial class EmbeddedPlaybackPipelineViewModel : ViewModelBase, I
             await _parent.Preview.RefreshSegmentsAsync();
             _parent.StatusText = _coordinator.CurrentSession.StatusMessage;
             _parent.ClearStatusErrorDetail();
+            NotifySessionStateChanged();
         }
         catch (OperationCanceledException)
         {
@@ -147,6 +164,7 @@ public sealed partial class EmbeddedPlaybackPipelineViewModel : ViewModelBase, I
             ResetProgressState();
             _pipelineCts?.Dispose();
             _pipelineCts = null;
+            NotifySessionStateChanged();
         }
     }
 
@@ -301,6 +319,8 @@ public sealed partial class EmbeddedPlaybackPipelineViewModel : ViewModelBase, I
     {
         NotifyBusyStateChanged();
         NotifyPipelineFooterChrome();
+        OnPropertyChanged(nameof(IsAwaitingSpeakerReview));
+        OnPropertyChanged(nameof(RunPipelineButtonLabel));
     }
 
     public void NotifyPipelineFooterChrome() => OnPropertyChanged(nameof(ShowPipelineStatusChrome));

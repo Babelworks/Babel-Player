@@ -33,7 +33,9 @@ the Translated stage, TTS re-runs under the requested provider and voice.
 
 `--diarization <provider>` selects a local diarization provider for this run
 (for example `wespeaker-local` or `sortformer-local`). `--no-diarization`
-clears diarization for the run and wins if both flags are passed.
+clears diarization for the run and wins if both flags are passed. Unlike the
+desktop UI, headless `--dub` does not pause after speaker mapping; it continues
+straight into translation and dub.
 Every run writes `{stem}-captions.srt`, `{stem}-dub.mp3`, `{stem}-dub.mp4`
 (unless `--no-mp4`), plus a `{stem}-dub.manifest.json` sidecar recording the
 providers, voice, language, segment count, timestamps, and exit code.

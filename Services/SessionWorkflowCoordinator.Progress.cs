@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Babel.Player.Models;
+using Babel.Player.Services.Pipeline;
 using SharedOrchestration = Babel.Player.Services.Orchestration;
 
 namespace Babel.Player.Services;
@@ -86,21 +87,8 @@ public sealed partial class SessionWorkflowCoordinator
 
     private static IReadOnlyList<SessionWorkflowStage> GetAdvancePipelineStages(
         SessionWorkflowStage currentStage,
-        bool shouldRunDiarization)
-    {
-        var stages = new List<SessionWorkflowStage>(capacity: shouldRunDiarization ? 4 : 3);
-        if (currentStage < SessionWorkflowStage.Transcribed)
-            stages.Add(SessionWorkflowStage.Transcribed);
-
-        if (shouldRunDiarization && currentStage < SessionWorkflowStage.Diarized)
-            stages.Add(SessionWorkflowStage.Diarized);
-
-        if (currentStage < SessionWorkflowStage.Translated)
-            stages.Add(SessionWorkflowStage.Translated);
-        if (currentStage < SessionWorkflowStage.TtsGenerated)
-            stages.Add(SessionWorkflowStage.TtsGenerated);
-        return stages;
-    }
+        bool shouldRunDiarization) =>
+        PipelineStateMachine.GetAdvancePipelineStages(currentStage, shouldRunDiarization);
 
     private static IReadOnlyList<SessionWorkflowStage> GetContinuationPipelineStages(SessionWorkflowStage currentStage)
     {

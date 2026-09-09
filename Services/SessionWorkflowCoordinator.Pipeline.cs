@@ -1099,15 +1099,16 @@ public sealed partial class SessionWorkflowCoordinator
     /// <param name="stageProgress">Optional per-stage reporter that receives stage title/detail and per-stage progress updates.</param>
     /// <param name="cancellationToken">Cancellation token observed throughout stage execution.</param>
     /// <remarks>
-    /// Entry starts at <see cref="CurrentSession"/>.Stage. Automatic runs continue through translation and TTS
-    /// after diarization instead of stopping for a manual speaker-mapping confirmation. Depending on cancellation or
+    /// Entry starts at <see cref="CurrentSession"/>.Stage. When diarization is enabled, advance stops at
+    /// <see cref="SessionWorkflowStage.Diarized"/> for speaker review; call <see cref="ContinuePipelineAsync"/> for
+    /// translation and TTS. When diarization is off, runs continue through translation and TTS. Depending on cancellation or
     /// prior stage state, possible return stages include <see cref="SessionWorkflowStage.Transcribed"/>,
     /// <see cref="SessionWorkflowStage.Diarized"/>, <see cref="SessionWorkflowStage.Translated"/>, and
     /// <see cref="SessionWorkflowStage.TtsGenerated"/>. State changes are persisted by the invoked stage methods
     /// (for example via <see cref="SaveCurrentSession"/>). Cancellation is respected and propagated via
     /// <paramref name="cancellationToken"/>.
     /// <summary>
-    /// Advances the session pipeline from its current stage through the remaining stages (transcription, diarization, translation, and TTS) according to the pipeline state machine.
+    /// Advances the session pipeline from its current stage through the remaining stages according to the pipeline state machine.
     /// </summary>
     /// <remarks>
     /// Entry state: the method expects CurrentSession.Stage to reflect the pipeline's current persisted stage.
@@ -1164,7 +1165,8 @@ public sealed partial class SessionWorkflowCoordinator
                         cancellationToken);
                     if (CurrentSession.Stage <= stageBeforeAction)
                         throw new InvalidOperationException($"Pipeline stalled: stage did not advance after {action} (still at {CurrentSession.Stage}).");
-                    break;
+                    // Pause for speaker review; ContinuePipelineAsync resumes translation + dub.
+                    return;
                 case PipelineAdvanceAction.TranslateAndDubFromTranscript:
                     await ExecuteStreamingTranslationAndTtsFromTranscriptAsync(
                         progress,

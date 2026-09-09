@@ -41,6 +41,10 @@ SourceMedia -> FfmpegExtractFullAudio (16 kHz mono)
 
 FFT/mel must not drift from TrackDub (MathNet.Numerics 5.0.0, `FourierOptions.Matlab`).
 
+## Related UX
+
+Multi-speaker UI pauses after diarization for speaker wizard review, then Continue runs translation and dub. Headless `--dub` does not pause (auto-continues). See `docs/history/smoke/milestone-13-diarized-pause-and-gpu-warmup.md` for the historical partial pause intent now restored on `feature/diarized-speaker-review-pause`.
+
 ## Verification
 
 ```powershell

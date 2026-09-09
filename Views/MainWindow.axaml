@@ -820,7 +820,7 @@
                                         IsVisible="{Binding !Playback.IsBusy}">
                                     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                                         <TextBlock Text="▶" VerticalAlignment="Center" />
-                                        <TextBlock Text="{local:Localize Button_RunPipeline}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Playback.Pipeline.RunPipelineButtonLabel}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
 

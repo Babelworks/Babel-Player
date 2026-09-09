@@ -399,6 +399,17 @@ public static class DubCli
             await coordinator.AdvancePipelineAsync(
                 new Progress<double>(p => Console.Write($"\r[dub] progress {p,3:F0}%   ")),
                 cancellationToken).ConfigureAwait(false);
+
+            // Headless runs do not pause for speaker review; finish translate+dub automatically.
+            if (coordinator.CurrentSession.Stage == SessionWorkflowStage.Diarized)
+            {
+                Console.WriteLine();
+                Console.WriteLine("[dub] continuing past speaker mapping…");
+                await coordinator.ContinuePipelineAsync(
+                    new Progress<double>(p => Console.Write($"\r[dub] progress {p,3:F0}%   ")),
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             Console.WriteLine();
             Console.WriteLine($"[dub] pipeline finished at {coordinator.CurrentSession.Stage}");
         }
