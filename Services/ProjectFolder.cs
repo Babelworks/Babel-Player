@@ -6,12 +6,13 @@ namespace Babel.Player.Services;
 
 /// <summary>
 /// Resolves the default on-disk project folder for a media file.
-/// When enabled, each source file gets a sibling <c>{stem}.babel</c> directory
-/// for session artifacts and (for headless runs) delivery files.
+/// When enabled, each source file gets a sibling <c>{filename}.babel</c> directory
+/// (for example <c>clip.mp4.babel</c>) for session artifacts and headless delivery files.
 /// </summary>
 internal static class ProjectFolder
 {
     public const string DirectorySuffix = ".babel";
+    public const string SessionsFolderName = "sessions";
 
     public static string? TryGetDefaultDirectory(string? sourceMediaPath)
     {
@@ -29,11 +30,11 @@ internal static class ProjectFolder
         }
 
         var parent = Path.GetDirectoryName(fullPath);
-        var stem = SanitizeDirectoryName(Path.GetFileNameWithoutExtension(fullPath));
-        if (string.IsNullOrWhiteSpace(parent) || string.IsNullOrWhiteSpace(stem))
+        var fileName = SanitizeDirectoryName(Path.GetFileName(fullPath));
+        if (string.IsNullOrWhiteSpace(parent) || string.IsNullOrWhiteSpace(fileName))
             return null;
 
-        return Path.Combine(parent, stem + DirectorySuffix);
+        return Path.Combine(parent, fileName + DirectorySuffix);
     }
 
     public static string ResolveSessionDirectory(
@@ -50,12 +51,17 @@ internal static class ProjectFolder
         if (projectDir is null)
             return appLocalDir;
 
-        var projectSessionsRoot = Path.Combine(projectDir, "sessions");
-        if (!TryEnsureWritable(projectSessionsRoot))
+        if (!TryEnsureWritableSessionsRoot(projectDir))
             return appLocalDir;
+
+        var projectSessionsRoot = Path.Combine(projectDir, SessionsFolderName);
 
         return Path.Combine(projectSessionsRoot, sessionId.ToString());
     }
+
+    public static bool TryEnsureWritableSessionsRoot(string projectDir) =>
+        !string.IsNullOrWhiteSpace(projectDir) &&
+        TryEnsureWritable(Path.Combine(projectDir, SessionsFolderName));
 
     public static bool TryEnsureWritable(string directory)
     {

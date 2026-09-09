@@ -308,7 +308,8 @@ public sealed class AppSettings
 
     /// <summary>
     /// When true, session artifacts (and headless delivery files) live in a
-    /// <c>{stem}.babel</c> folder next to the source media. Falls back to
+    /// <c>{filename}.babel</c> folder next to the source media (for example
+    /// <c>clip.mp4.babel</c>). Falls back to
     /// app-local storage when that folder cannot be created.
     /// </summary>
     public bool StoreProjectsNextToMedia { get; set; } = true;

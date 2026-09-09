@@ -23,7 +23,18 @@ public sealed class ProjectFolderTests : IDisposable
         var media = Path.Combine(_dir, "clip.mp4");
         var project = ProjectFolder.TryGetDefaultDirectory(media);
 
-        Assert.Equal(Path.Combine(_dir, "clip.babel"), project);
+        Assert.Equal(Path.Combine(_dir, "clip.mp4.babel"), project);
+    }
+
+    [Fact]
+    public void TryGetDefaultDirectory_KeepsSameStemDifferentExtensionsApart()
+    {
+        var mp4 = ProjectFolder.TryGetDefaultDirectory(Path.Combine(_dir, "clip.mp4"));
+        var mov = ProjectFolder.TryGetDefaultDirectory(Path.Combine(_dir, "clip.mov"));
+
+        Assert.Equal(Path.Combine(_dir, "clip.mp4.babel"), mp4);
+        Assert.Equal(Path.Combine(_dir, "clip.mov.babel"), mov);
+        Assert.NotEqual(mp4, mov);
     }
 
     [Fact]
@@ -42,8 +53,19 @@ public sealed class ProjectFolderTests : IDisposable
 
         var resolved = ProjectFolder.ResolveSessionDirectory(appLocalRoot, sessionId, media, useProjectFolders: true);
 
-        Assert.Equal(Path.Combine(_dir, "show.babel", "sessions", sessionId.ToString()), resolved);
-        Assert.True(Directory.Exists(Path.Combine(_dir, "show.babel", "sessions")));
+        Assert.Equal(Path.Combine(_dir, "show.mkv.babel", "sessions", sessionId.ToString()), resolved);
+        Assert.True(Directory.Exists(Path.Combine(_dir, "show.mkv.babel", "sessions")));
+    }
+
+    [Fact]
+    public void TryEnsureWritableSessionsRoot_FailsWhenSessionsPathIsAFile()
+    {
+        var projectDir = Path.Combine(_dir, "clip.mp4.babel");
+        Directory.CreateDirectory(projectDir);
+        File.WriteAllText(Path.Combine(projectDir, ProjectFolder.SessionsFolderName), "not a directory");
+
+        Assert.False(ProjectFolder.TryEnsureWritableSessionsRoot(projectDir));
+        Assert.True(ProjectFolder.TryEnsureWritable(projectDir));
     }
 
     [Fact]

@@ -117,7 +117,7 @@ public static class DubCli
             if (string.IsNullOrWhiteSpace(projectDir) && settings.StoreProjectsNextToMedia)
             {
                 var defaultProject = ProjectFolder.TryGetDefaultDirectory(media);
-                if (defaultProject is not null && ProjectFolder.TryEnsureWritable(defaultProject))
+                if (defaultProject is not null && ProjectFolder.TryEnsureWritableSessionsRoot(defaultProject))
                     projectDir = defaultProject;
                 else if (defaultProject is not null)
                     Console.Error.WriteLine($"[dub] Project folder is not writable ({defaultProject}). Using app-local sessions.");
@@ -487,13 +487,13 @@ public static class DubCli
         Console.WriteLine("Options:");
         Console.WriteLine("  --media <path>          Source media file (required)");
         Console.WriteLine("  --lang <code>           Translation target language (default: settings)");
-        Console.WriteLine("  --out <dir>             Output directory (default: {stem}.babel next to media)");
+        Console.WriteLine("  --out <dir>             Output directory (default: {filename}.babel next to media)");
         Console.WriteLine("  --tts <provider>        TTS provider override (e.g. chatterbox)");
         Console.WriteLine("  --voice <id>            TTS voice/model override (default: settings)");
         Console.WriteLine("  --no-diarization        Skip diarization for this run");
         Console.WriteLine("  --no-mp4                Skip MP4 export (SRT + MP3 only)");
         Console.WriteLine("  --consent-clone         Grant voice-cloning consent for this run");
-        Console.WriteLine("  --project-dir <dir>     Portable session storage (default: {stem}.babel next to media)");
+        Console.WriteLine("  --project-dir <dir>     Portable session storage (default: {filename}.babel next to media)");
         Console.WriteLine("  --keep-renders          Keep intermediate render files for debugging");
         Console.WriteLine("  --help, -h              Show this help");
         Console.WriteLine();

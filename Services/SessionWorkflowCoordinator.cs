@@ -1121,7 +1121,7 @@ internal static string MediaKey(string path) => Path.GetFullPath(path);
 
         if (ProjectFolder.TryGetDefaultDirectory(sourceMediaPath) is { } projectDir)
         {
-            var intended = Path.Combine(projectDir, "sessions", sessionId.ToString());
+            var intended = Path.Combine(projectDir, ProjectFolder.SessionsFolderName, sessionId.ToString());
             if (!string.Equals(resolved, intended, StringComparison.OrdinalIgnoreCase))
             {
                 _log.Warning(
