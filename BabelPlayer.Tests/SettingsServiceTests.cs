@@ -153,6 +153,21 @@ public sealed class SettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveAndLoad_KeepRenderArtifacts_RoundTrips()
+    {
+        var service = new SettingsService(_settingsPath, _log);
+        service.Save(new AppSettings
+        {
+            KeepRenderArtifacts = true
+        });
+
+        var loaded = service.LoadOrDefault();
+
+        Assert.True(loaded.KeepRenderArtifacts);
+        Assert.False(new AppSettings().KeepRenderArtifacts);
+    }
+
+    [Fact]
     public void SaveAndLoad_PaneLayout_RoundTrips()
     {
         var service = new SettingsService(_settingsPath, _log);
