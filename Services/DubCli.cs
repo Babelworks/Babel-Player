@@ -418,7 +418,7 @@ public static class DubCli
             _ = Path.GetFullPath(projectDir);
             return true;
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or SecurityException)
         {
             return false;
         }
