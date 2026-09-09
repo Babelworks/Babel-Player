@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using Babel.Player.Models;
 
@@ -60,8 +61,9 @@ public sealed partial class SessionWorkflowCoordinator
     private void PersistSnapshot(WorkflowSessionSnapshot snapshot, bool updateStatus)
     {
         var stopwatch = Stopwatch.StartNew();
+        var projectSessionDir = ResolveSessionDirectory(snapshot.SessionId, snapshot.SourceMediaPath);
         _store.Save(snapshot);
-        _perSessionStore.Save(snapshot);
+        _perSessionStore.Save(snapshot, projectSessionDir);
         stopwatch.Stop();
         var message = $"Saved current session snapshot to {StateFilePath}.";
         if (updateStatus)
@@ -72,8 +74,9 @@ public sealed partial class SessionWorkflowCoordinator
     private async Task PersistSnapshotAsync(WorkflowSessionSnapshot snapshot, bool updateStatus)
     {
         var stopwatch = Stopwatch.StartNew();
+        var projectSessionDir = ResolveSessionDirectory(snapshot.SessionId, snapshot.SourceMediaPath);
         await _store.SaveAsync(snapshot).ConfigureAwait(false);
-        await _perSessionStore.SaveAsync(snapshot).ConfigureAwait(false);
+        await _perSessionStore.SaveAsync(snapshot, projectSessionDir).ConfigureAwait(false);
         stopwatch.Stop();
         var message = $"Saved current session snapshot to {StateFilePath}.";
         if (updateStatus)

@@ -68,6 +68,14 @@ public sealed record CoordinatorOptions
     /// </summary>
     public ContainerizedRequestLeaseTracker? RequestLeaseTracker { get; init; }
 
+    /// <summary>
+    /// When set, session artifacts (transcripts, translations, TTS, stems) use
+    /// <c>{ProjectDirectory}/sessions/{sessionId}</c> instead of a media-sibling
+    /// <c>{filename}.babel</c> folder. Headless <c>--project-dir</c> sets this so
+    /// artifacts stay with the portable snapshot root.
+    /// </summary>
+    public string? ProjectDirectory { get; init; }
+
     /// <summary>Returns a <see cref="CoordinatorOptions"/> with all fields at their defaults (all null).</summary>
     public static CoordinatorOptions Empty { get; } = new();
 }

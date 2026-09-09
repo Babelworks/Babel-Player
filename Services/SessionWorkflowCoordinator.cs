@@ -27,6 +27,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
     private readonly RecentSessionsStore _recentStore;
     private readonly SessionArtifactReader _artifactReader;
     private readonly SessionSwitchService _sessionSwitchService;
+    private readonly string? _projectDirectoryOverride;
     private readonly ContainerizedServiceProbe? _containerizedProbe;
     private readonly IContainerizedInferenceManager? _containerizedInferenceManager;
     private readonly ManagedCpuRuntimeManager _cpuRuntimeManager;
@@ -171,6 +172,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
         _artifactReader = options.ArtifactReader ?? new SessionArtifactReader();
         _sessionSwitchService = options.SessionSwitchService
             ?? new SessionSwitchService(registries.PerSessionStore, registries.RecentStore, _log);
+        _projectDirectoryOverride = NormalizeProjectDirectory(options.ProjectDirectory);
 
         _cpuRuntimeManager = new ManagedCpuRuntimeManager(_log);
         TranscriptionRegistry = registries.TranscriptionRegistry;
@@ -425,6 +427,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
         // Stash current snapshot before switching — persist to disk so it survives restart.
         if (!string.IsNullOrEmpty(CurrentSession.SourceMediaPath))
         {
+            FlushPendingSave();
             RecentSessions = _sessionSwitchService.StashCurrentSession(
                 CurrentSession,
                 _mediaSnapshotCache,
@@ -439,6 +442,8 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
         var cached = switchingMedia
             ? _sessionSwitchService.LoadSessionForMedia(sourceMediaPath, _mediaSnapshotCache)
             : null;
+        if (cached is null && (switchingMedia || string.IsNullOrEmpty(CurrentSession.SourceMediaPath)))
+            cached = TryLoadProjectFolderSession(sourceMediaPath);
         if (cached is not null)
         {
             // Returning to a previously processed media — restore, validate, then copy into
@@ -452,7 +457,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
                     $"cleared={string.Join(",", validation.ClearedArtifacts)}; provenance={SessionSnapshotSemantics.DescribeSessionProvenance(validated)}");
             }
 
-            var sessionDir = _sessionSwitchService.GetSessionDirectory(validated.SessionId);
+            var sessionDir = ResolveSessionDirectory(validated.SessionId, sourceMediaPath);
             var mediaDir = Path.Combine(sessionDir, "media");
             Directory.CreateDirectory(mediaDir);
             var ingestedPath = Path.Combine(mediaDir, Path.GetFileName(sourceMediaPath));
@@ -490,7 +495,7 @@ public sealed partial class SessionWorkflowCoordinator : ObservableObject, IDisp
             // session is promoted rather than orphaned.
             var newSessionId = switchingMedia ? Guid.NewGuid() : CurrentSession.SessionId;
 
-            var sessionDir = _sessionSwitchService.GetSessionDirectory(newSessionId);
+            var sessionDir = ResolveSessionDirectory(newSessionId, sourceMediaPath);
             var mediaDir = Path.Combine(sessionDir, "media");
             Directory.CreateDirectory(mediaDir);
             var ingestedPath = Path.Combine(mediaDir, Path.GetFileName(sourceMediaPath));
@@ -839,7 +844,10 @@ internal static string MediaKey(string path) => Path.GetFullPath(path);
                 targetSegment?.SpeakerId,
                 referenceAudioPath,
                 Language: snapshot.Language,
-                SourceVideoPath: snapshot.SourceVideoPath),
+                SourceVideoPath: snapshot.SourceVideoPath,
+                TargetDurationSeconds: targetSegment is null ? null : Math.Max(0, targetSegment.End - targetSegment.Start),
+                SourceStartSeconds: targetSegment?.Start,
+                SourceEndSeconds: targetSegment?.End),
             cancellationToken);
         TrackPendingTtsTask(ttsTask);
         var result = await ttsTask;
@@ -1060,49 +1068,6 @@ internal static string MediaKey(string path) => Path.GetFullPath(path);
         start == (int)start
             ? FormattableString.Invariant($"segment_{start:0.0}")
             : FormattableString.Invariant($"segment_{start}");
-
-    /// <summary>
-    /// Base filename (no extension) for transcript JSON under <c>transcripts/</c>.
-    /// Prefers the ingested media file name so vocal-separation stem paths (for example <c>vocals.wav</c>)
-    /// do not replace the user-visible artifact name derived from the original loaded file.
-    /// </summary>
-    internal static string ResolveTranscriptArtifactStem(string? ingestedMediaPath, string transcriptionSourcePath)
-    {
-        if (!string.IsNullOrWhiteSpace(ingestedMediaPath))
-            return Path.GetFileNameWithoutExtension(ingestedMediaPath);
-        return Path.GetFileNameWithoutExtension(transcriptionSourcePath);
-    }
-
-    /// <summary>
-    /// Builds TTS output file paths for a translation artifact and ensures their parent directories exist.
-    /// Sanitizes the voice identifier so that reserved path characters don't produce invalid file names.
-    /// </summary>
-    /// <param name="translationPath">Full path to the translation artifact JSON file.</param>
-    /// <param name="voice">Voice identifier used to name the combined MP3 output file.</param>
-    /// <returns>
-    /// A tuple of <c>TtsPath</c> (full path to the per-translation MP3) and <c>SegmentsDir</c>
-    /// (directory for per-segment audio files); both directories are created if they do not exist.
-    /// </returns>
-    internal static (string TtsPath, string SegmentsDir) BuildTtsOutputPaths(string translationPath, string voice)
-    {
-        var sessionDir = Path.GetDirectoryName(Path.GetDirectoryName(translationPath)!)!;
-        var ttsDir = Path.Combine(sessionDir, "tts");
-        Directory.CreateDirectory(ttsDir);
-        var fileName = Path.GetFileNameWithoutExtension(translationPath);
-        // Sanitize the voice identifier so reserved/path characters don't produce invalid file names.
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var sanitizedVoice = string.Concat((voice ?? string.Empty).Split(invalidChars)).Trim();
-        if (sanitizedVoice.Length == 0) sanitizedVoice = "default";
-        var ttsPath = Path.Combine(ttsDir, $"{fileName}_{sanitizedVoice}.mp3");
-        var segmentsDir = Path.Combine(ttsDir, "segments", Path.GetFileNameWithoutExtension(translationPath));
-        Directory.CreateDirectory(segmentsDir);
-        return (ttsPath, segmentsDir);
-    }
-
-    private string GetSessionDirectory() => SessionDirectoryFor(CurrentSession.SessionId);
-
-    private string SessionDirectoryFor(Guid sessionId) =>
-        _sessionSwitchService.GetSessionDirectory(sessionId);
 
     /// <summary>
     /// Restores a previously-opened session by ID, stashing the current one first.

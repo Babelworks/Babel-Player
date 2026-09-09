@@ -313,6 +313,14 @@ public sealed class AppSettings
     /// </summary>
     public bool KeepRenderArtifacts { get; set; } = false;
 
+    /// <summary>
+    /// When true, session artifacts (and headless delivery files) live in a
+    /// <c>{filename}.babel</c> folder next to the source media (for example
+    /// <c>clip.mp4.babel</c>). Falls back to
+    /// app-local storage when that folder cannot be created.
+    /// </summary>
+    public bool StoreProjectsNextToMedia { get; set; } = true;
+
     /// <summary>UI theme: "Light", "Dark", or "System".</summary>
     public string Theme { get; set; } = "System";
 

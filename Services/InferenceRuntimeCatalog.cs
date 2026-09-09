@@ -252,10 +252,11 @@ public static class InferenceRuntimeCatalog
     /// <summary>
     /// Normalizes a diarization capability provider identifier to a canonical provider ID.
     /// </summary>
-    /// <param name="providerId">The provider identifier or legacy alias (may be null or empty). Recognized aliases: <see cref="ProviderNames.NemoDiarizationAlias"/> and <see cref="ProviderNames.WeSpeakerDiarizationAlias"/>.</param>
+    /// <param name="providerId">The provider identifier or legacy alias (may be null or empty). Recognized aliases: <see cref="ProviderNames.NemoDiarizationAlias"/>, <see cref="ProviderNames.WeSpeakerDiarizationAlias"/>, and <see cref="ProviderNames.SortFormerDiarizationAlias"/>.</param>
     /// <returns>
     /// The canonical provider ID: `ProviderNames.NemoLocal` for <see cref="ProviderNames.NemoDiarizationAlias"/> or `ProviderNames.NemoLocal`,
     /// `ProviderNames.WeSpeakerLocal` for <see cref="ProviderNames.WeSpeakerDiarizationAlias"/> or `ProviderNames.WeSpeakerLocal`,
+    /// `ProviderNames.SortFormerLocal` for <see cref="ProviderNames.SortFormerDiarizationAlias"/> or `ProviderNames.SortFormerLocal`,
     /// or the original `providerId` if non-null and unrecognized; otherwise an empty string.
     /// </returns>
     public static string NormalizeDiarizationCapabilityProviderId(string? providerId) => providerId switch
@@ -386,7 +387,7 @@ public static class InferenceRuntimeCatalog
     /// Determines whether the specified diarization provider identifier is a known canonical provider.
     /// </summary>
     /// <param name="providerId">The provider identifier to check; may be null or whitespace.</param>
-    /// <returns>`true` if the identifier is a recognized diarization provider (`ProviderNames.NemoLocal` or `ProviderNames.WeSpeakerLocal`), `false` otherwise.</returns>
+    /// <returns>`true` if the identifier is a recognized diarization provider (`ProviderNames.NemoLocal`, `ProviderNames.WeSpeakerLocal`, or `ProviderNames.SortFormerLocal`), `false` otherwise.</returns>
     public static bool IsKnownDiarizationProvider(string? providerId) => providerId switch
     {
         ProviderNames.NemoLocal

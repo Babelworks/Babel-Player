@@ -12,10 +12,13 @@ BabelPlayer.exe --dub --media <path> [--lang <code>] [--out <dir>]
   [--diarization <provider>] [--no-diarization] [--no-mp4] [--consent-clone]
 ```
 
+`--out <dir>` writes captions, dub audio, and the MP4 into that folder.
+When omitted, both `--out` and `--project-dir` default to a `{filename}.babel`
+folder next to the media file (for example `clip.mp4.babel`), matching the GUI.
 `--project-dir <dir>` stores the run's session (snapshot, transcripts,
-translations) in `<dir>/sessions` so the working state travels with the
-project instead of staying in machine-local app data. Settings, credentials,
-and recent-session history stay app-local.
+translations) in `<dir>/sessions`. Settings, credentials, and recent-session
+history stay app-local. Turn the default off in Settings (Keep project folders
+next to media) or pass an explicit `--project-dir`.
 
 Examples:
 

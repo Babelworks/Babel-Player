@@ -356,14 +356,15 @@ public static class DependencyLocator
         IMediaTransportManager transportManager,
         string stateDir,
         AppLog? startupLog,
-        out ManagedVenvHostManager? primaryGpuManager)
+        out ManagedVenvHostManager? primaryGpuManager,
+        string? projectDirectory = null)
     {
         try
         {
             appLog.Info("App startup: initializing session coordinator.");
             var coordinator = CreateCoordinatorInstance(
                 appLog, appSettings, perSessionStore, recentStore, apiKeyStore, 
-                transportManager, stateDir, out primaryGpuManager);
+                transportManager, stateDir, out primaryGpuManager, projectDirectory);
             
             coordinator.Initialize();
             
@@ -380,7 +381,7 @@ public static class DependencyLocator
 
             var coordinator = CreateCoordinatorInstance(
                 appLog, appSettings, perSessionStore, recentStore, apiKeyStore,
-                transportManager, stateDir, out primaryGpuManager);
+                transportManager, stateDir, out primaryGpuManager, projectDirectory);
 
             // Skip Initialize() to start with an empty session rather than crashing on corrupt state.
             // Still request containerized autostart.
@@ -395,7 +396,7 @@ public static class DependencyLocator
 
             var coordinator = CreateCoordinatorInstance(
                 appLog, appSettings, perSessionStore, recentStore, apiKeyStore,
-                transportManager, stateDir, out primaryGpuManager);
+                transportManager, stateDir, out primaryGpuManager, projectDirectory);
 
             // Skip Initialize() to start with an empty session rather than crashing on corrupt state.
             // Still request containerized autostart.
@@ -426,7 +427,8 @@ public static class DependencyLocator
         ApiKeyStore apiKeyStore,
         IMediaTransportManager transportManager,
         string stateDir,
-        out ManagedVenvHostManager primaryGpuManager)
+        out ManagedVenvHostManager primaryGpuManager,
+        string? projectDirectory = null)
     {
         var containerizedProbe = new ContainerizedServiceProbe(appLog);
         var requestLeaseTracker = new ContainerizedRequestLeaseTracker();
@@ -465,6 +467,7 @@ public static class DependencyLocator
             ExecutionPlanner            = DefaultExecutionPlanner.Instance,
             InferenceExecutionEngine    = DefaultInferenceExecutionEngine.Instance,
             RequestLeaseTracker         = requestLeaseTracker,
+            ProjectDirectory            = projectDirectory,
         };
 
         var coreServices = new CoordinatorCoreServices(snapshotStore, appLog, appSettings);
