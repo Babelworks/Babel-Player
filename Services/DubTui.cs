@@ -407,7 +407,7 @@ foreach (var line in File.ReadLines(logPath).TakeLast(40))
                     Console.WriteLine($"  {key}: {value}");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"[tui] Could not read settings: {ex.Message}");
         }
