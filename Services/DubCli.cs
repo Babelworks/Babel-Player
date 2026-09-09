@@ -214,6 +214,7 @@ public static class DubCli
             timings.Mark("dub-audio", stopwatch.Elapsed);
 
             var exitCode = ExitSuccess;
+            string? writtenMp4Path = null;
 
             if (!noMp4)
             {
@@ -241,6 +242,7 @@ public static class DubCli
                     var plan = planner.BuildPlan(session, segments, options);
                     await FfmpegVideoExportRunner.RunPlanAsync(plan, coordinator.Log, cts.Token).ConfigureAwait(false);
                     Console.WriteLine($"[dub] wrote {mp4Path}");
+                    writtenMp4Path = mp4Path;
                 }
             }
 
@@ -259,6 +261,8 @@ public static class DubCli
             timings.Mark("video-export", stopwatch.Elapsed);
 
             WriteRunTimings(outputDir, stem, timings, startedUtc);
+
+            WriteExportManifest(outputDir, media, coordinator, segments, srtPath, mp3Path, writtenMp4Path, startedUtc, exitCode);
 
             if (exitCode != ExitSuccess)
                 return exitCode;
@@ -310,6 +314,44 @@ public static class DubCli
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[dub] Could not write run timings: {ex.Message}");
+        }
+    }
+
+    private static void WriteExportManifest(
+        string outputDir,
+        string media,
+        SessionWorkflowCoordinator coordinator,
+        System.Collections.Generic.List<WorkflowSegmentState> segments,
+        string srtPath,
+        string mp3Path,
+        string? mp4Path,
+        DateTimeOffset startedUtc,
+        int exitCode)
+    {
+        try
+        {
+            var current = coordinator.CurrentSettings;
+            var manifest = new DubExportManifest(
+                Path.GetFullPath(media),
+                current.TargetLanguage,
+                current.TranscriptionProvider,
+                current.TranslationProvider,
+                current.TtsProvider,
+                current.TtsVoice,
+                !string.IsNullOrEmpty(current.DiarizationProvider),
+                mp4Path is not null,
+                srtPath,
+                mp3Path,
+                mp4Path,
+                startedUtc,
+                DateTimeOffset.UtcNow,
+                segments.Count,
+                exitCode);
+            Console.WriteLine($"[dub] wrote {DubManifest.Write(outputDir, manifest)}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[dub] Could not write export manifest: {ex.Message}");
         }
     }
 
