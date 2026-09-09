@@ -558,6 +558,10 @@
                                           HorizontalAlignment="Stretch"
                                           Background="{DynamicResource ControlBackgroundBrush}" Foreground="{DynamicResource PrimaryTextBrush}"
                                           BorderBrush="{DynamicResource BorderBrush}" />
+                                <CheckBox Content="{local:Localize Check_ChatterboxCloneConsent}"
+                                          IsChecked="{Binding Playback.ChatterboxVoiceCloneConsent, Mode=TwoWay}"
+                                          IsVisible="{Binding Playback.IsChatterboxTtsSelected}"
+                                          FontSize="12" />
                             </StackPanel>
 
                             <StackPanel Spacing="6" IsVisible="{Binding Playback.ShowTtsAssignmentModeSwitch}">

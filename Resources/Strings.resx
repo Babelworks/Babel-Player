@@ -225,6 +225,9 @@
   <data name="Hint_VoiceAssignment" xml:space="preserve">
     <value>Use one voice for every speaker, or turn on the option above and set a fallback plus per-speaker voices in the wizard.</value>
   </data>
+  <data name="Check_ChatterboxCloneConsent" xml:space="preserve">
+    <value>Consent to Chatterbox voice cloning</value>
+  </data>
   <data name="Section_ApiKeys" xml:space="preserve">
     <value>API KEYS</value>
   </data>

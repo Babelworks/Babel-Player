@@ -84,6 +84,7 @@ STRINGS: Dict[str, str] = {
     "Label_VoiceAssignment": "Voice assignment",
     "Check_AssignPerSpeakerInWizard": "Assign per speaker in Speaker Reference Wizard (fallback voice below)",
     "Hint_VoiceAssignment": "Use one voice for every speaker, or turn on the option above and set a fallback plus per-speaker voices in the wizard.",
+    "Check_ChatterboxCloneConsent": "Consent to Chatterbox voice cloning",
     "Section_ApiKeys": "API KEYS",
     "Hint_ConfigureCredentials": "Configure credentials for the providers selected above.",
     "Button_ApiKeys": "API Keys",
