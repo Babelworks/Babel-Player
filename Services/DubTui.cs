@@ -175,26 +175,38 @@ public static class DubTui
         }
     }
 
-    private static async Task RunPipelineWizardAsync(
+    private static async Task<int?> RunPipelineWizardAsync(
         string? presetMedia,
         string? presetLang,
         CancellationToken cancellationToken)
     {
         string? media = presetMedia ?? PickMediaFile();
         if (media is null)
-            return;
+            return null;
 
         string? lang = presetLang ?? PickLanguage();
         if (lang is null)
-            return;
+            return null;
 
         string? tts = PickTtsProvider();
         if (tts is null)
-            return;
+            return null;
 
         bool diarization = Confirm("Enable speaker diarization?", defaultYes: false);
         bool mp4 = Confirm("Export MP4 video?", defaultYes: !IsAudioOnlyMedia(media));
-        string outDir = PromptText("Output directory (empty = alongside media)", string.Empty);
+        string outDir = PromptText("Output directory (empty = alongside media)", string.Empty).Trim().Trim('"');
+        if (!string.IsNullOrWhiteSpace(outDir))
+        {
+            try
+            {
+                _ = Path.GetFullPath(outDir);
+            }
+            catch (ArgumentException)
+            {
+                Console.WriteLine("[tui] Invalid output directory.");
+                return null;
+            }
+        }
 
         bool consentClone = false;
         if (RequiresCloneConsent(tts))
@@ -205,7 +217,7 @@ public static class DubTui
             {
                 Console.WriteLine("Cancelled: cloning consent is mandatory and non-bypassable.");
                 return;
-            }
+                return null;
         }
 
         var argv = BuildDubArgv(media, lang, tts, diarization, mp4, outDir, consentClone);
@@ -222,6 +234,7 @@ public static class DubTui
             _ => $"[tui] pipeline failed (exit {exitCode}). See the log for details.",
         });
         PromptText("Press Enter to continue", string.Empty);
+        return exitCode;
     }
 
     private static string? PickMediaFile()
