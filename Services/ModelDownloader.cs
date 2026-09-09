@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -17,6 +18,8 @@ public sealed partial class ModelDownloader
 {
     private readonly AppLog _log;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromMinutes(30) };
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> SortFormerDownloadGates =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public ModelDownloader(AppLog log)
     {
@@ -551,48 +554,67 @@ except Exception as e:
         CancellationToken token = default)
     {
         var resolvedDir = ResolveSortFormerModelDir(modelDir);
-        try
-        {
-            Directory.CreateDirectory(resolvedDir);
-            Directory.CreateDirectory(Path.Combine(resolvedDir, "onnx"));
-        }
-        catch (Exception ex)
-        {
-            _log.Warning($"Could not create SortFormer model directory '{resolvedDir}': {ex.Message}");
-            return false;
-        }
-
-        var destinationPath = Path.Combine(resolvedDir, SortFormerModelCatalog.RelativeModelPath);
         if (IsSortFormerModelDownloaded(resolvedDir))
         {
             progress?.Report(1.0);
             return true;
         }
 
-        var existingInfo = new FileInfo(destinationPath);
-        if (existingInfo.Exists)
+        // Serialize check/download/verify per install dir so concurrent callers
+        // (Models tab + EnsureReady) do not fight over the same .tmp destination.
+        SemaphoreSlim gate = SortFormerDownloadGates.GetOrAdd(
+            Path.GetFullPath(resolvedDir),
+            static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(token).ConfigureAwait(false);
+        try
         {
-            try { existingInfo.Delete(); }
-            catch { /* re-download below */ }
+            if (IsSortFormerModelDownloaded(resolvedDir))
+            {
+                progress?.Report(1.0);
+                return true;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(resolvedDir);
+                Directory.CreateDirectory(Path.Combine(resolvedDir, "onnx"));
+            }
+            catch (Exception ex)
+            {
+                _log.Warning($"Could not create SortFormer model directory '{resolvedDir}': {ex.Message}");
+                return false;
+            }
+
+            var destinationPath = Path.Combine(resolvedDir, SortFormerModelCatalog.RelativeModelPath);
+            var existingInfo = new FileInfo(destinationPath);
+            if (existingInfo.Exists)
+            {
+                try { existingInfo.Delete(); }
+                catch { /* re-download below */ }
+            }
+
+            _log.Info($"Downloading SortFormer model: {SortFormerModelCatalog.HubFileName}");
+            if (!await DownloadFileAsync(SortFormerModelCatalog.ModelDownloadUrl, destinationPath, progress, token))
+                return false;
+
+            if (!SortFormerModelFiles.TryVerifySha256(destinationPath, out var actualHash))
+            {
+                _log.Warning(
+                    $"SortFormer download failed SHA-256 verification (got {actualHash ?? "<none>"}, " +
+                    $"expected {SortFormerModelCatalog.Sha256}).");
+                try { File.Delete(destinationPath); }
+                catch { /* best effort */ }
+                return false;
+            }
+
+            _log.Info("SortFormer model downloaded successfully.");
+            progress?.Report(1.0);
+            return true;
         }
-
-        _log.Info($"Downloading SortFormer model: {SortFormerModelCatalog.HubFileName}");
-        if (!await DownloadFileAsync(SortFormerModelCatalog.ModelDownloadUrl, destinationPath, progress, token))
-            return false;
-
-        if (!SortFormerModelFiles.TryVerifySha256(destinationPath, out var actualHash))
+        finally
         {
-            _log.Warning(
-                $"SortFormer download failed SHA-256 verification (got {actualHash ?? "<none>"}, " +
-                $"expected {SortFormerModelCatalog.Sha256}).");
-            try { File.Delete(destinationPath); }
-            catch { /* best effort */ }
-            return false;
+            gate.Release();
         }
-
-        _log.Info("SortFormer model downloaded successfully.");
-        progress?.Report(1.0);
-        return true;
     }
 
     private static string GetHuggingFaceCacheDir()
