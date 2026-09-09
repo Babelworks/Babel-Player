@@ -23,12 +23,19 @@ internal sealed record SortFormerModelFiles(string RootDirectory, string ModelPa
     public static bool TryVerifySha256(string modelPath, out string? actualHash)
     {
         actualHash = null;
-        if (!File.Exists(modelPath))
-            return false;
+        try
+        {
+            if (!File.Exists(modelPath))
+                return false;
 
-        using var stream = File.OpenRead(modelPath);
-        var hash = SHA256.HashData(stream);
-        actualHash = Convert.ToHexString(hash).ToLowerInvariant();
-        return string.Equals(actualHash, SortFormerModelCatalog.Sha256, StringComparison.OrdinalIgnoreCase);
+            using var stream = File.OpenRead(modelPath);
+            var hash = SHA256.HashData(stream);
+            actualHash = Convert.ToHexString(hash).ToLowerInvariant();
+            return string.Equals(actualHash, SortFormerModelCatalog.Sha256, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
     }
 }

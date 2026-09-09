@@ -48,6 +48,7 @@ All packages below are licensed under the MIT License unless otherwise noted.
 | CommunityToolkit.Mvvm | 8.4.2 | MIT | https://github.com/CommunityToolkit/dotnet |
 | Tmds.DBus.Protocol | 0.92.0 | MIT | https://github.com/tmds/Tmds.DBus |
 | System.Security.Cryptography.ProtectedData | 10.0.5 | MIT | https://github.com/dotnet/runtime |
+| MathNet.Numerics | 5.0.0 | MIT | https://github.com/mathnet/mathnet-numerics |
 
 ---
 

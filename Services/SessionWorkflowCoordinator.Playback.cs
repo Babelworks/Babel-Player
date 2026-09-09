@@ -147,15 +147,15 @@ public sealed partial class SessionWorkflowCoordinator
 
     /// <summary>
     /// True when the diarization input must be rewritten to 16 kHz mono PCM WAV before the provider runs.
+    /// SortFormer always normalizes (including .wav) because DecodePcm16Mono only accepts 16-bit PCM.
     /// </summary>
     internal static bool RequiresPcmWavExtractForDiarization(string audioPath, string? diarizationProvider)
     {
-        var extension = Path.GetExtension(audioPath).ToLowerInvariant();
-        if (Array.Exists(VideoExtensions, ext => ext == extension))
+        if (string.Equals(diarizationProvider, ProviderNames.SortFormerLocal, StringComparison.Ordinal))
             return true;
 
-        return string.Equals(diarizationProvider, ProviderNames.SortFormerLocal, StringComparison.Ordinal)
-            && !string.Equals(extension, ".wav", StringComparison.Ordinal);
+        var extension = Path.GetExtension(audioPath).ToLowerInvariant();
+        return Array.Exists(VideoExtensions, ext => ext == extension);
     }
 
     /// <summary>
@@ -209,7 +209,7 @@ public sealed partial class SessionWorkflowCoordinator
                 throw new PipelineProviderException(
                     isVideo
                         ? "Cannot diarize video files without audio processing support (ffmpeg)."
-                        : "Cannot diarize non-WAV audio with SortFormer without audio processing support (ffmpeg).");
+                        : "Cannot diarize with SortFormer without audio processing support (ffmpeg).");
 
             tempExtractedAudio = Path.Combine(Path.GetTempPath(), $"diar_{Guid.NewGuid():N}.wav");
             _log.Debug($"Extracting PCM WAV for diarization: {audioPath} → {tempExtractedAudio}");
