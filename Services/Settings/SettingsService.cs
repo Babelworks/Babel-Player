@@ -148,6 +148,7 @@ public sealed class SettingsService
         public int? DiarizationMinSpeakers { get; set; }
         public int? DiarizationMaxSpeakers { get; set; }
         public bool? VocalSeparationEnabled { get; set; }
+        public bool? KeepRenderArtifacts { get; set; }
         public bool? IsPipelinePaneVisible { get; set; }
         public bool? IsSegmentsPaneVisible { get; set; }
         public double? PipelinePaneWidth { get; set; }
@@ -225,6 +226,7 @@ public sealed class SettingsService
             settings.DiarizationMinSpeakers = null;
             settings.DiarizationMaxSpeakers = null;
             settings.VocalSeparationEnabled = VocalSeparationEnabled ?? settings.VocalSeparationEnabled;
+            settings.KeepRenderArtifacts = KeepRenderArtifacts ?? settings.KeepRenderArtifacts;
             settings.IsPipelinePaneVisible = IsPipelinePaneVisible ?? settings.IsPipelinePaneVisible;
             settings.IsSegmentsPaneVisible = IsSegmentsPaneVisible ?? settings.IsSegmentsPaneVisible;
             settings.PipelinePaneWidth = NormalizePaneWidth(PipelinePaneWidth, settings.PipelinePaneWidth);
@@ -317,6 +319,7 @@ public sealed class SettingsService
             DiarizationMinSpeakers = null,
             DiarizationMaxSpeakers = null,
             VocalSeparationEnabled = settings.VocalSeparationEnabled,
+            KeepRenderArtifacts = settings.KeepRenderArtifacts,
             IsPipelinePaneVisible = settings.IsPipelinePaneVisible,
             IsSegmentsPaneVisible = settings.IsSegmentsPaneVisible,
             PipelinePaneWidth = NormalizePaneWidth(settings.PipelinePaneWidth, AppSettings.PipelinePaneDefaultWidth),
