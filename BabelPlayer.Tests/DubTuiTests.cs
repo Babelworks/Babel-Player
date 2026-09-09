@@ -67,10 +67,12 @@ public sealed class DubTuiTests
     }
 
     [Fact]
-    public async Task QuitChoice_ReturnsZero()
+    public async Task QuitChoice_ReturnsZeroWithMenuOnStderr()
     {
-        var (code, _, _) = await RunWithStdIoAsync(["--tui"], "0\n");
+        var (code, output, error) = await RunWithStdIoAsync(["--tui"], "0\n");
         Assert.Equal(0, code);
+        Assert.DoesNotContain("Babel Player Dub TUI", output);
+        Assert.Contains("Babel Player Dub TUI", error);
     }
 
     [Fact]
@@ -134,6 +136,68 @@ public sealed class DubTuiTests
     public void ReadSettingsValue_FallsBackForUnknownKey()
     {
         Assert.Equal("fb", DubTui.ReadSettingsValue("NoSuchSettingKey", "fb"));
+    }
+
+    [Fact]
+    public async Task UnknownTtsPreset_ReturnsArgumentError()
+    {
+        var (code, _, _) = await RunWithStdIoAsync(["--tui", "--tts", "nope"], string.Empty);
+        Assert.Equal(1, code);
+    }
+
+    [Fact]
+    public void IsKnownTtsChoice_AcceptsMenuIdsOnly()
+    {
+        Assert.True(DubTui.IsKnownTtsChoice(ProviderNames.Piper));
+        Assert.True(DubTui.IsKnownTtsChoice("Chatterbox"));
+        Assert.False(DubTui.IsKnownTtsChoice("nope"));
+        Assert.False(DubTui.IsKnownTtsChoice(string.Empty));
+        Assert.False(DubTui.IsKnownTtsChoice(null));
+    }
+
+    [Fact]
+    public void IsValidOutDir_AcceptsNormalPathsRejectsNul()
+    {
+        Assert.True(DubTui.IsValidOutDir("C:\\out"));
+        Assert.False(DubTui.IsValidOutDir("a\0b"));
+    }
+
+    [Fact]
+    public async Task FullPresets_SkipAllPrompts()
+    {
+        var media = Path.Combine(Path.GetTempPath(), $"babel-tui-{Guid.NewGuid():N}.mp4");
+        File.WriteAllText(media, string.Empty);
+        string[]? captured = null;
+        var previous = DubTui.RunPipelineEngine;
+        try
+        {
+            DubTui.RunPipelineEngine = (argv, _) =>
+            {
+                captured = argv;
+                return Task.FromResult(0);
+            };
+            var (code, output, error) = await RunWithStdIoAsync(
+                ["--tui", "--media", media, "--lang", "es", "--tts", "chatterbox",
+                 "--voice", "v1", "--no-diarization", "--no-mp4", "--out", "some-dir",
+                 "--consent-clone"],
+                "1\n");
+            Assert.Equal(0, code);
+            Assert.NotNull(captured);
+            Assert.Contains("--tts", captured);
+            Assert.Contains(ProviderNames.Chatterbox, captured);
+            Assert.Contains("v1", captured);
+            Assert.Contains("--no-diarization", captured);
+            Assert.Contains("--no-mp4", captured);
+            Assert.Contains("--consent-clone", captured);
+            Assert.Contains("some-dir", captured);
+            Assert.Contains("transcription", output);
+            Assert.DoesNotContain("TTS provider:", error);
+        }
+        finally
+        {
+            DubTui.RunPipelineEngine = previous;
+            File.Delete(media);
+        }
     }
 
     [Fact]

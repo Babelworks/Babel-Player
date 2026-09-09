@@ -24,8 +24,23 @@ namespace Babel.Player.Services;
 /// Exit codes mirror <see cref="DubCli"/>: 0 success, 1 args, 2 pipeline failure,
 /// 130 cancelled.
 /// </summary>
+/// <remarks>
+/// Stream contract (stolen from the Trackdub archive CLI): interactive chrome
+/// (menus, prompts, hints, diagnostics) goes to stderr so stdout stays reserved
+/// for machine-readable output (effective configuration, launch line, run
+/// result, log and settings views, usage).
+/// </remarks>
 public static class DubTui
 {
+    private sealed record TuiPresets(
+        string? Media,
+        string? Lang,
+        string? Tts,
+        string? Voice,
+        bool? Diarization,
+        bool? Mp4,
+        string? OutDir,
+        bool ConsentClone);
     private static readonly string[] MediaExtensions =
     [
         ".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm",
@@ -115,6 +130,13 @@ public static class DubTui
         return fallback;
     }
 
+    internal static bool IsKnownTtsChoice(string? tts) =>
+        !string.IsNullOrWhiteSpace(tts) &&
+        TtsChoices.Any(c => string.Equals(c.Id, tts.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasFlag(string[] args, string flag) =>
+        args.Any(a => string.Equals(a, flag, StringComparison.OrdinalIgnoreCase));
+
     internal static string EffectiveConfigLine(string? ttsChoice, string lang)
     {
         var defaults = new AppSettings();
@@ -162,7 +184,7 @@ public static class DubTui
             return 0;
         }
 
-        var known = new[] { "--tui", "--media", "--lang", "--help", "-h" };
+        var known = new[] { "--tui", "--media", "--lang", "--tts", "--voice", "--out", "--no-diarization", "--no-mp4", "--consent-clone", "--help", "-h" };
         var unknown = args.Where(a => a.StartsWith('-') && !known.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (unknown.Length > 0)
         {
@@ -173,6 +195,9 @@ public static class DubTui
 
         string? presetMedia = BenchmarkCli.GetArg(args, "--media");
         string? presetLang = BenchmarkCli.GetArg(args, "--lang");
+        string? presetTts = BenchmarkCli.GetArg(args, "--tts");
+        string? presetVoice = BenchmarkCli.GetArg(args, "--voice");
+        string? presetOut = BenchmarkCli.GetArg(args, "--out");
         if (presetMedia is not null && !File.Exists(presetMedia))
         {
             Console.Error.WriteLine($"[tui] Media file not found: {presetMedia}");
@@ -183,26 +208,47 @@ public static class DubTui
             Console.Error.WriteLine($"[tui] Unsupported language: {presetLang}");
             return 1;
         }
+        if (presetTts is not null && !IsKnownTtsChoice(presetTts))
+        {
+            Console.Error.WriteLine($"[tui] Unknown TTS provider: {presetTts}");
+            return 1;
+        }
+        if (presetOut is not null && !IsValidOutDir(presetOut))
+        {
+            Console.Error.WriteLine($"[tui] Invalid output directory: {presetOut}");
+            return 1;
+        }
+
+        // Staged wizard (archive DubSetupWizard pattern): preset flags answer their
+        // prompts up front, so a fully preset invocation runs without prompting.
+        TuiPresets? presets = new(
+            presetMedia,
+            presetLang,
+            presetTts?.Trim().ToLowerInvariant(),
+            presetVoice?.Trim(),
+            HasFlag(args, "--no-diarization") ? false : null,
+            HasFlag(args, "--no-mp4") ? false : null,
+            presetOut?.Trim().Trim('"'),
+            HasFlag(args, "--consent-clone"));
 
         try
         {
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Console.WriteLine();
-                Console.WriteLine("Babel Player Dub TUI");
-                Console.WriteLine("  1) Run dubbing pipeline");
-                Console.WriteLine("  2) View log tail");
-                Console.WriteLine("  3) Show current settings");
-                Console.WriteLine("  0) Quit");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("Babel Player Dub TUI");
+                Console.Error.WriteLine("  1) Run dubbing pipeline");
+                Console.Error.WriteLine("  2) View log tail");
+                Console.Error.WriteLine("  3) Show current settings");
+                Console.Error.WriteLine("  0) Quit");
                 var choice = PromptText("Select", "0");
 
                 switch (choice.Trim())
                 {
                     case "1":
-                        var exitCode = await RunPipelineWizardAsync(presetMedia, presetLang, cancellationToken).ConfigureAwait(false);
-                        presetMedia = null;
-                        presetLang = null;
+                        var exitCode = await RunPipelineWizardAsync(presets, cancellationToken).ConfigureAwait(false);
+                        presets = null;
                         if (exitCode.HasValue)
                             return exitCode.Value;
                         break;
@@ -218,7 +264,7 @@ public static class DubTui
                     case "exit":
                         return 0;
                     default:
-                        Console.WriteLine("Unknown choice. Enter 0-3 or q to quit.");
+                        Console.Error.WriteLine("Unknown choice. Enter 0-3 or q to quit.");
                         break;
                 }
             }
@@ -229,50 +275,71 @@ public static class DubTui
         }
     }
 
+    internal static bool IsValidOutDir(string outDir)
+    {
+        try
+        {
+            _ = Path.GetFullPath(outDir);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
     private static async Task<int?> RunPipelineWizardAsync(
-        string? presetMedia,
-        string? presetLang,
+        TuiPresets? presets,
         CancellationToken cancellationToken)
     {
-        string? media = presetMedia ?? PickMediaFile();
+        string? media = presets?.Media ?? PickMediaFile();
         if (media is null)
             return null;
 
-        string? lang = presetLang ?? PickLanguage();
+        string? lang = presets?.Lang ?? PickLanguage();
         if (lang is null)
             return null;
 
-        string? tts = PickTtsProvider();
+        string? tts = presets?.Tts ?? PickTtsProvider();
         if (tts is null)
             return null;
 
-        string defaultVoice = ReadSettingsValue("TtsVoice", new AppSettings().TtsVoice);
-        string voice = PromptText($"Voice/model (empty = {defaultVoice})", string.Empty).Trim();
-
-        bool diarization = Confirm("Enable speaker diarization?", defaultYes: false);
-        bool mp4 = Confirm("Export MP4 video?", defaultYes: !IsAudioOnlyMedia(media));
-        string outDir = PromptText("Output directory (empty = alongside media)", string.Empty).Trim().Trim('"');
-        if (!string.IsNullOrWhiteSpace(outDir))
+        string voice;
+        if (presets?.Voice is not null)
         {
-            try
+            voice = presets.Voice;
+        }
+        else
+        {
+            string defaultVoice = ReadSettingsValue("TtsVoice", new AppSettings().TtsVoice);
+            voice = PromptText($"Voice/model (empty = {defaultVoice})", string.Empty).Trim();
+        }
+
+        bool diarization = presets?.Diarization ?? Confirm("Enable speaker diarization?", defaultYes: false);
+        bool mp4 = presets?.Mp4 ?? Confirm("Export MP4 video?", defaultYes: !IsAudioOnlyMedia(media));
+        string outDir;
+        if (presets?.OutDir is not null)
+        {
+            outDir = presets.OutDir;
+        }
+        else
+        {
+            outDir = PromptText("Output directory (empty = alongside media)", string.Empty).Trim().Trim('"');
+            if (!string.IsNullOrWhiteSpace(outDir) && !IsValidOutDir(outDir))
             {
-                _ = Path.GetFullPath(outDir);
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
-            {
-                Console.WriteLine("[tui] Invalid output directory.");
+                Console.Error.WriteLine("[tui] Invalid output directory.");
                 return null;
             }
         }
 
-        bool consentClone = false;
-        if (RequiresCloneConsent(tts))
+        bool consentClone = presets?.ConsentClone ?? false;
+        if (RequiresCloneConsent(tts) && !consentClone)
         {
-            Console.WriteLine("Chatterbox performs voice cloning, which requires explicit consent.");
+            Console.Error.WriteLine("Chatterbox performs voice cloning, which requires explicit consent.");
             consentClone = Confirm("Grant voice-cloning consent for this run?", defaultYes: false);
             if (!consentClone)
             {
-                Console.WriteLine("Cancelled: cloning consent is mandatory and non-bypassable.");
+                Console.Error.WriteLine("Cancelled: cloning consent is mandatory and non-bypassable.");
                 return null;
             }
         }
@@ -321,7 +388,7 @@ public static class DubTui
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
             {
                 Console.Error.WriteLine($"[tui] Cannot list {directory}: {ex.Message}");
-                Console.WriteLine("  (type a different directory or full path; empty cancels)");
+                Console.Error.WriteLine("  (type a different directory or full path; empty cancels)");
                 string recovery = PromptText("Media", string.Empty).Trim();
                 if (string.IsNullOrEmpty(recovery))
                     return null;
@@ -335,16 +402,16 @@ public static class DubTui
                 }
                 else
                 {
-                    Console.WriteLine("Not found. Try a valid path.");
+                    Console.Error.WriteLine("Not found. Try a valid path.");
                 }
                 continue;
             }
 
-            Console.WriteLine();
-            Console.WriteLine($"Media files in {directory}:");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine($"Media files in {directory}:");
             for (int index = 0; index < files.Length; index++)
-                Console.WriteLine($"  {index + 1}) {Path.GetFileName(files[index])}");
-            Console.WriteLine("  (or type a file name, directory, or full path; empty cancels)");
+                Console.Error.WriteLine($"  {index + 1}) {Path.GetFileName(files[index])}");
+            Console.Error.WriteLine("  (or type a file name, directory, or full path; empty cancels)");
 
             string input = PromptText("Media", string.Empty).Trim();
             if (string.IsNullOrEmpty(input))
@@ -364,7 +431,7 @@ public static class DubTui
                 continue;
             }
 
-            Console.WriteLine("Not found. Try a listed number or a valid path.");
+            Console.Error.WriteLine("Not found. Try a listed number or a valid path.");
         }
     }
 
@@ -372,14 +439,14 @@ public static class DubTui
     {
         while (true)
         {
-            Console.WriteLine();
-            Console.WriteLine("Target language:");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("Target language:");
             for (int index = 0; index < TargetLanguages.Count; index++)
             {
                 var code = TargetLanguages[index];
-                Console.WriteLine($"  {index + 1}) {code} - {LanguageDisplayNames.ForIso639(code, CultureInfo.InvariantCulture)}");
+                Console.Error.WriteLine($"  {index + 1}) {code} - {LanguageDisplayNames.ForIso639(code, CultureInfo.InvariantCulture)}");
             }
-            Console.WriteLine("  (or type a language code; empty cancels)");
+            Console.Error.WriteLine("  (or type a language code; empty cancels)");
 
             string input = PromptText("Language", string.Empty).Trim();
             if (string.IsNullOrEmpty(input))
@@ -392,7 +459,7 @@ public static class DubTui
             if (IsSupportedTargetLanguage(typedCode))
                 return typedCode;
 
-            Console.WriteLine("Unknown language. Pick a listed number or code.");
+            Console.Error.WriteLine("Unknown language. Pick a listed number or code.");
         }
     }
 
@@ -400,11 +467,11 @@ public static class DubTui
     {
         while (true)
         {
-            Console.WriteLine();
-            Console.WriteLine("TTS provider:");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("TTS provider:");
             for (int index = 0; index < TtsChoices.Length; index++)
-                Console.WriteLine($"  {index + 1}) {TtsChoices[index].Label}");
-            Console.WriteLine("  (empty cancels)");
+                Console.Error.WriteLine($"  {index + 1}) {TtsChoices[index].Label}");
+            Console.Error.WriteLine("  (empty cancels)");
 
             string input = PromptText("TTS provider", string.Empty).Trim();
             if (string.IsNullOrEmpty(input))
@@ -418,7 +485,7 @@ public static class DubTui
             if (match != default)
                 return match.Id;
 
-            Console.WriteLine("Unknown provider. Pick a listed number.");
+            Console.Error.WriteLine("Unknown provider. Pick a listed number.");
         }
     }
 
@@ -428,17 +495,17 @@ public static class DubTui
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "BabelPlayer", "logs", "dub.log");
 
-        Console.WriteLine();
+        Console.Error.WriteLine();
         if (!File.Exists(logPath))
         {
-            Console.WriteLine("No dub log yet. Run the pipeline first.");
+            Console.Error.WriteLine("No dub log yet. Run the pipeline first.");
             return;
         }
 
         try
         {
-foreach (var line in File.ReadLines(logPath).TakeLast(40))
-    Console.WriteLine(line);
+            foreach (var line in File.ReadLines(logPath).TakeLast(40))
+                Console.WriteLine(line);
         }
         catch (IOException ex)
         {
@@ -454,10 +521,10 @@ foreach (var line in File.ReadLines(logPath).TakeLast(40))
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "BabelPlayer", "settings", "app-settings.json");
 
-        Console.WriteLine();
+        Console.Error.WriteLine();
         if (!File.Exists(settingsPath))
         {
-            Console.WriteLine("No settings file yet (defaults apply on first run).");
+            Console.Error.WriteLine("No settings file yet (defaults apply on first run).");
             return;
         }
 
@@ -494,16 +561,16 @@ foreach (var line in File.ReadLines(logPath).TakeLast(40))
                 return true;
             if (input is "n" or "no")
                 return false;
-            Console.WriteLine("Please answer y or n.");
+            Console.Error.WriteLine("Please answer y or n.");
         }
     }
 
     private static string PromptText(string prompt, string defaultValue)
     {
         if (!string.IsNullOrEmpty(defaultValue))
-            Console.Write($"{prompt} [{defaultValue}]: ");
+            Console.Error.Write($"{prompt} [{defaultValue}]: ");
         else
-            Console.Write($"{prompt}: ");
+            Console.Error.Write($"{prompt}: ");
 
         string? input = Console.ReadLine();
         if (string.IsNullOrEmpty(input))
@@ -520,14 +587,15 @@ foreach (var line in File.ReadLines(logPath).TakeLast(40))
         Console.WriteLine("Babel Player — Dub TUI (interactive headless pipeline)");
         Console.WriteLine();
         Console.WriteLine("Usage:");
-        Console.WriteLine("  BabelPlayer.exe --tui [--media <path>] [--lang <code>]");
+        Console.WriteLine("  BabelPlayer.exe --tui [--media <path>] [--lang <code>] [--tts <provider>]");
+        Console.WriteLine("    [--voice <id>] [--out <dir>] [--no-diarization] [--no-mp4] [--consent-clone]");
         Console.WriteLine();
-        Console.WriteLine("Menu-driven setup collects provider, voice, diarization, and export");
-        Console.WriteLine("choices, shows the effective configuration, then runs the same pipeline");
-        Console.WriteLine("engine as --dub. The process exits with the pipeline exit code after a");
-        Console.WriteLine("run; quitting from the menu exits 0. Numbered menus read stdin lines,");
-        Console.WriteLine("so sessions are scriptable:");
-        Console.WriteLine("  \"1\",\"2\",\"\",\"n\",\"y\",\"\" | BabelPlayer.exe --tui --media clip.mp4 --lang es");
+        Console.WriteLine("Menu-driven setup asks only for what flags did not answer, shows the");
+        Console.WriteLine("effective configuration, then runs the same pipeline engine as --dub.");
+        Console.WriteLine("The process exits with the pipeline exit code after a run; quitting");
+        Console.WriteLine("from the menu exits 0. Prompts go to stderr and results to stdout, so");
+        Console.WriteLine("sessions are scriptable:");
+        Console.WriteLine("  \"1\" | BabelPlayer.exe --tui --media clip.mp4 --lang es --tts piper --no-diarization");
         Console.WriteLine();
     }
 }

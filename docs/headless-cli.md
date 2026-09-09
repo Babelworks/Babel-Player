@@ -28,17 +28,18 @@ the Translated stage, TTS re-runs under the requested provider and voice.
 ## --tui (interactive menu)
 
 ```text
-BabelPlayer.exe --tui [--media <path>] [--lang <code>]
+BabelPlayer.exe --tui [--media <path>] [--lang <code>] [--tts <provider>]
+  [--voice <id>] [--out <dir>] [--no-diarization] [--no-mp4] [--consent-clone]
 ```
 
-Numbered menus collect the TTS provider, voice/model, diarization, and export
-choices, print the effective configuration (saved defaults included), then run
-the same engine as `--dub`. The process exits with the pipeline exit code
-after a run; quitting from the menu exits 0. Menus read stdin lines, so
-sessions are scriptable:
+Staged setup asks only for what the flags did not answer, prints the effective
+configuration (saved defaults included), then runs the same engine as `--dub`.
+The process exits with the pipeline exit code after a run; quitting from the
+menu exits 0. Prompts go to stderr and results to stdout, so sessions are
+scriptable:
 
 ```text
-"1","2","","n","y","" | BabelPlayer.exe --tui --media clip.mp4 --lang es
+"1" | BabelPlayer.exe --tui --media clip.mp4 --lang es --tts piper --no-diarization
 ```
 
 The media picker never changes the process working directory. Voice cloning
